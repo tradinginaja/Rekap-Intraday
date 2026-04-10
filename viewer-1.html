@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rekap Trade Plan — Live View</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#080c14;--bg2:#0d1220;--card:#111827;--card2:#161f30;
+  --border:#1e2d45;--border2:#253650;
+  --green:#00e676;--green-dim:rgba(0,230,118,.12);
+  --red:#ff4757;--red-dim:rgba(255,71,87,.12);
+  --yellow:#ffd32a;--yellow-dim:rgba(255,211,42,.12);
+  --blue:#4fc3f7;--blue-dim:rgba(79,195,247,.12);
+  --purple:#b39ddb;--purple-dim:rgba(179,157,219,.12);
+  --orange:#ff9f43;--orange-dim:rgba(255,159,67,.12);
+  --text:#c8d8f0;--text-dim:#4a6080;--text-mid:#8a9bb5;
+  --accent:#00e676;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,230,118,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(0,230,118,.018) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;z-index:0}
+.wrapper{position:relative;z-index:1;max-width:1160px;margin:0 auto;padding:0 16px 80px}
+
+/* ── HEADER & TABS ── */
+.site-header{padding:26px 0 18px;border-bottom:1px solid var(--border);margin-bottom:26px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.site-title{font-family:'Syne',sans-serif;font-size:1.35rem;font-weight:800;color:var(--accent);letter-spacing:-.02em;display:flex;align-items:center;gap:9px}
+.site-subtitle{font-size:.6rem;color:var(--text-dim);letter-spacing:.09em;text-transform:uppercase;margin-top:3px}
+.sync-status{font-size:.58rem;padding:4px 10px;border-radius:20px;border:1px solid var(--border);color:var(--text-dim);display:flex;align-items:center;gap:5px}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text-dim)}
+.sync-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.sync-dot.err{background:var(--red)}
+.tabs{display:flex;gap:3px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:4px;flex-wrap:wrap}
+.tab-btn{background:none;border:none;color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:.68rem;padding:7px 14px;border-radius:7px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.tab-btn.active{background:var(--accent);color:#030810;font-weight:700}
+.tab-btn:hover:not(.active){color:var(--text);background:var(--border)}
+
+.page{display:none;animation:fadeIn .3s ease}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── STATS ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;margin-bottom:22px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.stat-card.green::before{background:var(--green)}.stat-card.red::before{background:var(--red)}
+.stat-card.yellow::before{background:var(--yellow)}.stat-card.blue::before{background:var(--blue)}
+.stat-card.orange::before{background:var(--orange)}.stat-card.purple::before{background:var(--purple)}
+.stat-label{font-size:.58rem;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px}
+.stat-value{font-family:'Syne',sans-serif;font-size:1.85rem;font-weight:800;line-height:1}
+.stat-card.green .stat-value{color:var(--green)}.stat-card.red .stat-value{color:var(--red)}
+.stat-card.yellow .stat-value{color:var(--yellow)}.stat-card.blue .stat-value{color:var(--blue)}
+.stat-card.orange .stat-value{color:var(--orange)}.stat-card.purple .stat-value{color:var(--purple)}
+.stat-sub{font-size:.58rem;color:var(--text-dim);margin-top:5px}
+
+/* ── WIN RATE BAR ── */
+.winrate-bar-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:22px}
+.winrate-bar-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.winrate-title{font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;color:var(--text)}
+.winrate-pct{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--green)}
+.bar-track{height:9px;background:var(--bg2);border-radius:999px;overflow:hidden;display:flex}
+.bar-hit{background:var(--green);height:100%;transition:width .9s cubic-bezier(.4,0,.2,1)}
+.bar-gagal{background:var(--red);height:100%;transition:width .9s cubic-bezier(.4,0,.2,1)}
+.bar-belum{background:var(--blue);height:100%;transition:width .9s cubic-bezier(.4,0,.2,1)}
+.bar-diluar{background:var(--yellow);height:100%;transition:width .9s cubic-bezier(.4,0,.2,1)}
+.bar-legend{display:flex;gap:14px;margin-top:9px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:.6rem;color:var(--text-dim)}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+
+/* ── STRATEGY ── */
+.strategy-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:22px}
+.strategy-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.strategy-title{font-family:'Syne',sans-serif;font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.strat-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:.65rem}
+.strat-row:last-child{border:none}
+.strat-lbl{color:var(--text-dim)}
+.strat-val{font-weight:700}
+.section-title{font-family:'Syne',sans-serif;font-size:.72rem;font-weight:700;color:var(--text-mid);letter-spacing:.12em;text-transform:uppercase;margin-bottom:11px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+
+/* ── HISTORY ── */
+.history-list{display:flex;flex-direction:column;gap:8px}
+.history-item{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s}
+.history-item:hover{border-color:var(--border2)}
+.history-top{display:flex;align-items:center;gap:12px;padding:13px 15px;flex-wrap:wrap;cursor:pointer}
+.hist-date{font-size:.72rem;font-weight:600;color:var(--text);min-width:95px}
+.hist-badges{display:flex;gap:5px;flex-wrap:wrap;flex:1}
+.badge{padding:3px 7px;border-radius:5px;font-size:.58rem;font-weight:600;letter-spacing:.04em}
+.badge-green{background:var(--green-dim);color:var(--green)}
+.badge-red{background:var(--red-dim);color:var(--red)}
+.badge-yellow{background:var(--yellow-dim);color:var(--yellow)}
+.badge-blue{background:var(--blue-dim);color:var(--blue)}
+.badge-orange{background:var(--orange-dim);color:var(--orange)}
+.hist-wr{font-family:'Syne',sans-serif;font-size:.88rem;font-weight:800;min-width:48px;text-align:right}
+.hist-del{background:none;border:1px solid var(--border);color:var(--red);font-size:.6rem;padding:4px 8px;border-radius:5px;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all .2s}
+.hist-del:hover{background:var(--red-dim);border-color:var(--red)}
+.expand-btn{font-size:.6rem;color:var(--text-dim);background:none;border:1px solid var(--border);cursor:pointer;padding:3px 8px;border-radius:5px;transition:all .2s;font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.expand-btn:hover{border-color:var(--accent);color:var(--accent)}
+.history-rincian{border-top:1px solid var(--border);padding:10px 14px;display:none}
+.history-item.expanded .history-rincian{display:block}
+
+/* ── EMITEN TABLE ── */
+.emiten-table{width:100%;border-collapse:collapse;font-size:.62rem}
+.emiten-table th{color:var(--text-dim);font-weight:600;letter-spacing:.07em;text-transform:uppercase;padding:6px 9px;text-align:left;background:var(--bg2);font-size:.55rem}
+.emiten-table td{padding:7px 9px;border-bottom:1px solid var(--border);vertical-align:top}
+.emiten-table tr:last-child td{border:none}
+.emiten-table tr:hover td{background:rgba(255,255,255,.018)}
+.emiten-name{font-weight:700;color:var(--text);font-size:.68rem;letter-spacing:.04em}
+.mini-status{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;font-size:.58rem;font-weight:600;margin-bottom:2px;white-space:nowrap}
+.mini-status.hit{background:var(--green-dim);color:var(--green)}
+.mini-status.gagal{background:var(--red-dim);color:var(--red)}
+.mini-status.diluar{background:var(--yellow-dim);color:var(--yellow)}
+.mini-status.belum{background:var(--blue-dim);color:var(--blue)}
+.mini-comment{font-size:.55rem;color:var(--text-mid);font-style:italic;margin-top:1px;padding-left:2px}
+
+/* ── CHARTS ── */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:720px){.chart-grid{grid-template-columns:1fr}}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px}
+.chart-card.full{grid-column:1/-1}
+.chart-title{font-family:'Syne',sans-serif;font-size:.75rem;font-weight:800;color:var(--text);margin-bottom:3px}
+.chart-sub{font-size:.58rem;color:var(--text-dim);margin-bottom:14px}
+canvas{max-height:260px}
+.canvas-tall{max-height:320px !important}
+.top-table{width:100%;border-collapse:collapse;font-size:.62rem}
+.top-table th{color:var(--text-dim);text-transform:uppercase;letter-spacing:.07em;font-size:.54rem;padding:6px 10px;text-align:left;background:var(--bg2)}
+.top-table td{padding:7px 10px;border-bottom:1px solid var(--border)}
+.top-table tr:last-child td{border:none}
+.top-table tr:hover td{background:rgba(255,255,255,.02)}
+.wr-bar{height:5px;border-radius:999px;background:var(--border);margin-top:3px;overflow:hidden}
+.wr-fill{height:100%;border-radius:999px}
+
+/* ── MODAL DETAIL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(4,8,16,.92);z-index:100;overflow-y:auto;padding:20px 16px;backdrop-filter:blur(5px)}
+.modal-overlay.open{display:flex;align-items:flex-start;justify-content:center}
+.modal-box{background:var(--card);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:740px;overflow:hidden;animation:fadeIn .25s ease}
+.modal-header{background:var(--bg2);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+.modal-title{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:800;color:var(--text)}
+.modal-date{font-size:.6rem;color:var(--text-dim);margin-top:2px}
+.modal-close{background:none;border:1px solid var(--border);color:var(--text-dim);font-size:.9rem;width:30px;height:30px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.modal-close:hover{border-color:var(--red);color:var(--red)}
+.modal-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.msm-cell{background:var(--bg2);padding:11px 12px;text-align:center}
+.msm-val{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:800}
+.msm-lbl{font-size:.52rem;color:var(--text-dim);margin-top:2px;text-transform:uppercase;letter-spacing:.07em}
+.modal-body{padding:14px 18px;max-height:70vh;overflow-y:auto}
+.modal-strat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.modal-strat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px}
+.msc-title{font-size:.62rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px}
+.msc-stats{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.msc-stat{background:var(--card);border-radius:7px;padding:6px 10px;text-align:center}
+.msc-stat-val{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:800}
+.msc-stat-lbl{font-size:.5rem;color:var(--text-dim);margin-top:2px;letter-spacing:.05em}
+.saham-block{border:1px solid var(--border);border-radius:10px;margin-bottom:9px;overflow:hidden}
+.saham-name{background:var(--bg2);padding:9px 13px;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:800;color:var(--text);letter-spacing:.04em;border-bottom:1px solid var(--border)}
+.saham-entries{padding:7px 11px;display:flex;flex-direction:column;gap:5px}
+.entry-row{display:flex;align-items:flex-start;gap:9px;padding:7px 10px;border-radius:7px;font-size:.68rem}
+.entry-row.hit{background:var(--green-dim);border-left:3px solid var(--green)}
+.entry-row.gagal{background:var(--red-dim);border-left:3px solid var(--red)}
+.entry-row.diluar{background:var(--yellow-dim);border-left:3px solid var(--yellow)}
+.entry-row.belum{background:var(--blue-dim);border-left:3px solid var(--blue)}
+.entry-icon{font-size:.9rem;flex-shrink:0;margin-top:1px}
+.entry-info{flex:1}
+.entry-status{font-weight:700;margin-bottom:2px}
+.entry-row.hit .entry-status{color:var(--green)}.entry-row.gagal .entry-status{color:var(--red)}
+.entry-row.diluar .entry-status{color:var(--yellow)}.entry-row.belum .entry-status{color:var(--blue)}
+.entry-comment{font-size:.6rem;color:var(--text-mid);margin-top:3px;font-style:italic}
+
+/* ── PIN MODAL ── */
+.pin-overlay{display:none;position:fixed;inset:0;background:rgba(4,8,16,.95);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+.pin-overlay.open{display:flex}
+.pin-box{background:var(--card);border:1px solid var(--border2);border-radius:18px;padding:32px 28px;width:100%;max-width:340px;text-align:center}
+.pin-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--text);margin-bottom:4px}
+.pin-sub{font-size:.62rem;color:var(--text-dim);margin-bottom:22px}
+.pin-dots{display:flex;justify-content:center;gap:10px;margin-bottom:20px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);transition:all .2s}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent);box-shadow:0 0 8px var(--accent)}
+.pin-dot.err{background:var(--red);border-color:var(--red)}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pin-key{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;color:var(--text);cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.pin-key:hover{background:var(--border2);border-color:var(--accent)}
+.pin-key:active{transform:scale(.94)}
+.pin-key.del{font-size:.75rem;color:var(--red)}
+.pin-key.cancel{font-size:.65rem;color:var(--text-dim)}
+.pin-err-msg{font-size:.62rem;color:var(--red);margin-top:10px;min-height:16px}
+
+/* ── SUPABASE SETTINGS ── */
+.settings-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.settings-title{font-family:'Syne',sans-serif;font-size:.82rem;font-weight:800;color:var(--text);margin-bottom:5px;display:flex;align-items:center;gap:8px}
+.settings-desc{font-size:.62rem;color:var(--text-dim);line-height:1.8;margin-bottom:14px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+/* ── IMPORT / MANUAL ── */
+.import-wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:680px){.import-wrap{grid-template-columns:1fr}}
+.import-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px}
+.import-card-title{font-family:'Syne',sans-serif;font-size:.82rem;font-weight:800;color:var(--text);margin-bottom:5px}
+.import-card-desc{font-size:.62rem;color:var(--text-dim);line-height:1.8;margin-bottom:14px}
+label{display:block;font-size:.58rem;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;margin-top:11px}
+label:first-child{margin-top:0}
+textarea,input,select{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.68rem;padding:9px 11px;outline:none;transition:border-color .2s;resize:vertical}
+textarea:focus,input:focus,select:focus{border-color:var(--accent)}
+textarea{min-height:200px}
+.btn{background:var(--accent);color:#030810;border:none;border-radius:8px;padding:10px 18px;font-family:'JetBrains Mono',monospace;font-size:.68rem;font-weight:700;cursor:pointer;transition:all .2s;width:100%;margin-top:12px}
+.btn:hover{background:#00ff99;transform:translateY(-1px);box-shadow:0 4px 18px rgba(0,230,118,.28)}
+.btn-sec{background:none;color:var(--text-mid);border:1px solid var(--border)}
+.btn-sec:hover{background:var(--border);color:var(--text);box-shadow:none;transform:none}
+.btn-danger{background:none;color:var(--red);border:1px solid var(--red)}
+.btn-danger:hover{background:var(--red-dim);box-shadow:none;transform:none}
+.parse-preview{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:11px;font-size:.62rem;color:var(--text-mid);margin-top:9px;line-height:1.8;display:none;max-height:180px;overflow-y:auto}
+.saham-form-block{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:7px}
+.saham-form-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.saham-form-name{font-family:'Syne',sans-serif;font-weight:800;font-size:.82rem;color:var(--accent)}
+.add-entry-btn{background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);border-radius:6px;padding:4px 9px;font-size:.58rem;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all .2s}
+.add-entry-btn:hover{background:var(--blue);color:#040810}
+.entry-form-row{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px;display:grid;grid-template-columns:1.3fr 1fr 1fr 1.6fr auto;gap:7px;align-items:center;margin-bottom:5px}
+.entry-form-row input,.entry-form-row select{margin:0;font-size:.64rem;padding:6px 9px}
+.del-entry-btn{background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:6px;padding:5px 8px;cursor:pointer;font-size:.75rem;transition:all .2s;text-align:center}
+.del-entry-btn:hover{background:var(--red);color:white}
+.add-saham-row{display:flex;gap:7px;align-items:center;margin-top:9px}
+.add-saham-row input{flex:1;margin:0}
+.btn-small{padding:7px 13px;font-size:.62rem;white-space:nowrap;margin-top:0;width:auto}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:22px;right:22px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:11px 16px;font-size:.68rem;color:var(--text);z-index:300;animation:fadeIn .3s ease;box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:270px}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--red);color:var(--red)}
+.toast.warn{border-color:var(--yellow);color:var(--yellow)}
+.no-data{text-align:center;padding:36px 24px;background:var(--card);border:1px dashed var(--border2);border-radius:12px;color:var(--text-dim);font-size:.68rem;line-height:1.9}
+select option{background:var(--card)}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+@media(max-width:560px){.stats-grid{grid-template-columns:repeat(2,1fr)}.strategy-grid{grid-template-columns:1fr}.modal-strat-grid{grid-template-columns:1fr}.entry-form-row{grid-template-columns:1fr 1fr}}
+</style>
+<style>
+/* ── VIEWER TAMBAHAN ── */
+.loading-screen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .5s}
+.loading-screen.hidden{opacity:0;pointer-events:none}
+.loading-icon{font-size:2.5rem;animation:spin 2s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.loading-text{font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;color:var(--accent)}
+.loading-sub{font-size:.62rem;color:var(--text-dim)}
+.readonly-badge{font-size:.55rem;padding:3px 9px;border-radius:20px;background:var(--blue-dim);border:1px solid var(--blue);color:var(--blue);letter-spacing:.06em;font-weight:600}
+.sync-dot.loading{background:var(--yellow);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.refresh-btn{background:none;border:1px solid var(--border);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:.6rem;padding:5px 11px;border-radius:7px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:5px}
+.refresh-btn:hover{border-color:var(--accent);color:var(--accent)}
+.refresh-btn.spinning .icon{display:inline-block;animation:spin .7s linear infinite}
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div class="loading-screen" id="loading-screen">
+  <div class="loading-icon">🦉</div>
+  <div class="loading-text">Mengambil data rekap...</div>
+  <div class="loading-sub">Terhubung ke cloud</div>
+</div>
+
+<div class="wrapper">
+
+<header class="site-header">
+  <div>
+    <div class="site-title">🦉 REKAP TRADE PLAN</div>
+    <div class="site-subtitle">Live View — Intraday Win Rate</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span class="readonly-badge">👁️ VIEW ONLY</span>
+    <div class="sync-status" id="sync-status" onclick="doRefresh()" style="cursor:pointer" title="Klik untuk refresh">
+      <div class="sync-dot loading" id="sync-dot"></div>
+      <span id="sync-txt">Memuat...</span>
+    </div>
+    <button class="refresh-btn" id="refresh-btn" onclick="doRefresh()">
+      <span class="icon">🔄</span> Refresh
+    </button>
+    <nav class="tabs">
+      <button class="tab-btn active" onclick="switchTab('dashboard',this)">📊 Dashboard</button>
+      <button class="tab-btn" onclick="switchTab('history',this)">📅 Riwayat</button>
+      <button class="tab-btn" onclick="switchTab('visual',this)">📈 Visualisasi</button>
+    </nav>
+  </div>
+</header>
+
+<!-- ═══ DASHBOARD ═══ -->
+<div id="page-dashboard" class="page active">
+  <div class="stats-grid">
+    <div class="stat-card green"><div class="stat-label">Win Rate</div><div class="stat-value" id="s-winrate">—</div><div class="stat-sub">Hit ÷ (Hit+Gagal)</div></div>
+    <div class="stat-card green"><div class="stat-label">Total Hit ✅</div><div class="stat-value" id="s-hit">0</div><div class="stat-sub">semua sesi</div></div>
+    <div class="stat-card red"><div class="stat-label">Total Gagal ❌</div><div class="stat-value" id="s-gagal">0</div><div class="stat-sub">semua sesi</div></div>
+    <div class="stat-card blue"><div class="stat-label">Belum Hit ⏳</div><div class="stat-value" id="s-belum">0</div><div class="stat-sub">semua sesi</div></div>
+    <div class="stat-card yellow"><div class="stat-label">Diluar Plan 🟡</div><div class="stat-value" id="s-diluar">0</div><div class="stat-sub">semua sesi</div></div>
+    <div class="stat-card orange"><div class="stat-label">Total Sesi</div><div class="stat-value" id="s-sesi">0</div><div class="stat-sub">hari tersimpan</div></div>
+  </div>
+
+  <div class="winrate-bar-wrap">
+    <div class="winrate-bar-label">
+      <div><div class="winrate-title">DISTRIBUSI KESELURUHAN</div><div class="stat-sub" id="bar-lbl">—</div></div>
+      <div class="winrate-pct" id="bar-wr">— %</div>
+    </div>
+    <div class="bar-track">
+      <div class="bar-hit" id="bar-hit" style="width:0%"></div>
+      <div class="bar-gagal" id="bar-gagal" style="width:0%"></div>
+      <div class="bar-belum" id="bar-belum" style="width:0%"></div>
+      <div class="bar-diluar" id="bar-diluar" style="width:0%"></div>
+    </div>
+    <div class="bar-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Hit</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Gagal</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Belum</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Diluar</div>
+    </div>
+  </div>
+
+  <div class="strategy-grid">
+    <div class="strategy-card">
+      <div class="strategy-title" style="color:var(--green)">📗 BoW — Buy on Weakness</div>
+      <div class="strat-row"><span class="strat-lbl">Hit</span><span class="strat-val" style="color:var(--green)" id="bow-hit">0</span></div>
+      <div class="strat-row"><span class="strat-lbl">Gagal</span><span class="strat-val" style="color:var(--red)" id="bow-gagal">0</span></div>
+      <div class="strat-row"><span class="strat-lbl">Belum Hit</span><span class="strat-val" style="color:var(--blue)" id="bow-belum">0</span></div>
+      <div class="strat-row"><span class="strat-lbl">Diluar Plan</span><span class="strat-val" style="color:var(--yellow)" id="bow-diluar">0</span></div>
+      <div class="strat-row"><span class="strat-lbl">Win Rate BoW</span><span class="strat-val" style="color:var(--accent)" id="bow-wr">—</span></div>
+    </div>
+    <div class="strategy-card">
+      <div class="strategy-title" style="color:var(--purple)">📘 HAKA</div>
+      <div class="strat-row"><span class="strat-lbl">Hit</span><span class="strat-val" style="color:var(--green)" id="haka-hit">0</span></div>
+      <div class="strat-row"><span class="strat-lbl">Gagal</span><span class="strat-val" style="color:var(--red)" id="haka-gagal">0</span></div>
+      <div class="strat-row"><span class="strat-lbl">Belum Hit</span><span class="strat-val" style="color:var(--blue)" id="haka-belum">0</span></div>
+      <div class="strat-row"><span class="strat-lbl">Diluar Plan</span><span class="strat-val" style="color:var(--yellow)" id="haka-diluar">0</span></div>
+      <div class="strat-row"><span class="strat-lbl">Win Rate HAKA</span><span class="strat-val" style="color:var(--purple)" id="haka-wr">—</span></div>
+    </div>
+  </div>
+
+  <div class="section-title">REKAP TERBARU</div>
+  <div id="db-recent"></div>
+</div>
+
+<!-- ═══ RIWAYAT ═══ -->
+<div id="page-history" class="page">
+  <div class="section-title">SEMUA RIWAYAT <span style="font-weight:400;color:var(--text-dim)" id="hist-count"></span></div>
+  <div id="hist-list" class="history-list"></div>
+</div>
+
+<!-- ═══ VISUALISASI ═══ -->
+<div id="page-visual" class="page">
+  <div class="chart-card full" style="margin-bottom:14px">
+    <div class="chart-title">📈 Tren Win Rate Harian</div>
+    <div class="chart-sub">Persentase Hit ÷ (Hit+Gagal) per sesi</div>
+    <canvas id="c-wr" class="canvas-tall"></canvas>
+  </div>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-title">📊 Distribusi per Hari</div>
+      <div class="chart-sub">Komposisi hit/gagal/belum/diluar per sesi</div>
+      <canvas id="c-daily"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">⚔️ BoW vs HAKA Win Rate</div>
+      <div class="chart-sub">Perbandingan tren win rate per strategi</div>
+      <canvas id="c-strat"></canvas>
+    </div>
+  </div>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-title">🥧 Proporsi Total Plan</div>
+      <div class="chart-sub">Dari seluruh plan semua sesi</div>
+      <canvas id="c-donut" style="max-height:220px"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">🏆 Top 10 Emiten</div>
+      <div class="chart-sub">Saham paling sering masuk trade plan</div>
+      <canvas id="c-emiten"></canvas>
+    </div>
+  </div>
+  <div class="chart-card full" style="margin-top:0">
+    <div class="chart-title">📋 Rincian Win Rate per Emiten</div>
+    <div class="chart-sub">Akumulatif semua rekap</div>
+    <div style="overflow-x:auto;margin-top:10px">
+      <table class="top-table">
+        <thead><tr>
+          <th>#</th><th>Emiten</th>
+          <th style="color:var(--green)">Hit ✅</th>
+          <th style="color:var(--red)">Gagal ❌</th>
+          <th style="color:var(--blue)">Belum ⏳</th>
+          <th style="color:var(--yellow)">Diluar 🟡</th>
+          <th style="color:var(--green)">Hit BoW</th>
+          <th style="color:var(--purple)">Hit HAKA</th>
+          <th>Win Rate</th><th>Bar</th>
+        </tr></thead>
+        <tbody id="emiten-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- /wrapper -->
+
+<script>
+/* ══════════════════════════════════════════════
+   SUPABASE — READ ONLY
+══════════════════════════════════════════════ */
+const SB_URL_HC='https://gimyvakdssxtbghumuup.supabase.co';
+const SB_KEY_HC='sb_publishable_DUusXIkPLyErOHmKN16XUA_WYG81BM_';
+const TABLE='rekap_sessions';
+
+let SESSION_DATA=[];
+
+async function sbFetch(){
+  try{
+    const r=await fetch(`${SB_URL_HC}/rest/v1/${TABLE}?select=*&order=id.asc`,{
+      headers:{'apikey':SB_KEY_HC,'Authorization':'Bearer '+SB_KEY_HC}
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  }catch(e){console.error('Supabase error:',e);return null;}
+}
+
+/* getSess — ambil dari memori, sort desc */
+const getSess=()=>[...SESSION_DATA].sort((a,b)=>b.date.localeCompare(a.date));
+
+/* ── SYNC STATUS ── */
+function updateSyncStatus(ok=null){
+  const dot=document.getElementById('sync-dot');
+  const txt=document.getElementById('sync-txt');
+  if(ok===false){dot.className='sync-dot err';txt.textContent='Cloud ✗';}
+  else if(ok===true){dot.className='sync-dot ok';txt.textContent=new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});}
+  else{dot.className='sync-dot loading';txt.textContent='Memuat...';}
+}
+
+/* ── TABS ── */
+function switchTab(n,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+n).classList.add('active');
+  if(btn)btn.classList.add('active');
+  if(n==='dashboard')renderDash();
+  if(n==='history')renderHist();
+  if(n==='visual')renderVis();
+}
+
+/* ── UTILS ── */
+function iso(d){
+  if(!d)return'';
+  const p=d.split('/');
+  return p.length===3?`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`:d;
+}
+function today(){return new Date().toISOString().slice(0,10);}
+function fmtDate(d){
+  if(!d)return'—';
+  const [y,m,dd]=d.split('-');
+  const bulan=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
+  return`${+dd} ${bulan[+m-1]} ${y}`;
+}
+function shortD(d){
+  if(!d)return'';
+  const [,m,dd]=d.split('-');
+  return`${+dd}/${m}`;
+}
+function wrColor(wr){
+  if(wr===null||wr===undefined)return'var(--text-dim)';
+  return wr>=70?'var(--green)':wr>=50?'var(--yellow)':'var(--red)';
+}
+
+/* ── STRAT STATS ── */
+function stratStats(all){
+  const bow={hit:0,gagal:0,belum:0,diluar:0};
+  const haka={hit:0,gagal:0,belum:0,diluar:0};
+  all.forEach(s=>{
+    (s.sahamList||[]).forEach(sh=>{
+      (sh.entries||[]).forEach(e=>{
+        const t=(e.type||'').toUpperCase();
+        const st=e.status||'diluar';
+        if(t==='BOW'){if(bow[st]!==undefined)bow[st]++;else bow.diluar++;}
+        if(t==='HAKA'){if(haka[st]!==undefined)haka[st]++;else haka.diluar++;}
+      });
+    });
+  });
+  return{bow,haka};
+}
+
+/* ── EMITEN STATS ── */
+function emitenStats(all){
+  const map={};
+  all.forEach(s=>{
+    (s.sahamList||[]).forEach(sh=>{
+      const nm=(sh.name||'?').toUpperCase();
+      if(!map[nm])map[nm]={name:nm,hit:0,gagal:0,belum:0,diluar:0,bowHit:0,hakaHit:0};
+      (sh.entries||[]).forEach(e=>{
+        const t=(e.type||'').toUpperCase();
+        const st=e.status||'diluar';
+        if(map[nm][st]!==undefined)map[nm][st]++;else map[nm].diluar++;
+        if(st==='hit'){if(t==='BOW')map[nm].bowHit++;if(t==='HAKA')map[nm].hakaHit++;}
+      });
+    });
+  });
+  return Object.values(map).map(e=>{
+    const dec=e.hit+e.gagal;
+    return{...e,wr:dec?+((e.hit/dec)*100).toFixed(1):null};
+  }).sort((a,b)=>(b.hit+b.gagal)-(a.hit+a.gagal));
+}
+
+/* ── RENDER DASHBOARD ── */
+function renderDash(){
+  const all=getSess();
+  let tot={hit:0,gagal:0,diluar:0,belum:0};
+  all.forEach(s=>{tot.hit+=(s.summary.hit||0);tot.gagal+=(s.summary.gagal||0);tot.diluar+=(s.summary.diluar||0);tot.belum+=(s.summary.belum||0);});
+  const dec=tot.hit+tot.gagal,grand=dec+tot.diluar+tot.belum;
+  const wr=dec?((tot.hit/dec)*100).toFixed(1):null;
+  document.getElementById('s-winrate').textContent=wr?wr+'%':'—';
+  document.getElementById('s-hit').textContent=tot.hit;
+  document.getElementById('s-gagal').textContent=tot.gagal;
+  document.getElementById('s-belum').textContent=tot.belum;
+  document.getElementById('s-diluar').textContent=tot.diluar;
+  document.getElementById('s-sesi').textContent=all.length;
+  document.getElementById('bar-wr').textContent=wr?wr+'%':'— %';
+  document.getElementById('bar-lbl').textContent=grand?`${grand} total plan dari ${all.length} sesi`:'belum ada data';
+  if(grand){
+    document.getElementById('bar-hit').style.width=(tot.hit/grand*100)+'%';
+    document.getElementById('bar-gagal').style.width=(tot.gagal/grand*100)+'%';
+    document.getElementById('bar-belum').style.width=(tot.belum/grand*100)+'%';
+    document.getElementById('bar-diluar').style.width=(tot.diluar/grand*100)+'%';
+  }
+  const{bow,haka}=stratStats(all);
+  const bwd=bow.hit+bow.gagal,hkd=haka.hit+haka.gagal;
+  document.getElementById('bow-hit').textContent=bow.hit;
+  document.getElementById('bow-gagal').textContent=bow.gagal;
+  document.getElementById('bow-belum').textContent=bow.belum;
+  document.getElementById('bow-diluar').textContent=bow.diluar;
+  document.getElementById('bow-wr').textContent=bwd?((bow.hit/bwd)*100).toFixed(1)+'%':'—';
+  document.getElementById('haka-hit').textContent=haka.hit;
+  document.getElementById('haka-gagal').textContent=haka.gagal;
+  document.getElementById('haka-belum').textContent=haka.belum;
+  document.getElementById('haka-diluar').textContent=haka.diluar;
+  document.getElementById('haka-wr').textContent=hkd?((haka.hit/hkd)*100).toFixed(1)+'%':'—';
+  const el=document.getElementById('db-recent');
+  const recent=all.slice(0,5);
+  el.innerHTML=recent.length?'<div class="history-list">'+recent.map(s=>histHTML(s)).join('')+'</div>':noData();
+}
+
+/* ── RENDER HISTORY ── */
+function renderHist(){
+  const all=getSess();
+  document.getElementById('hist-count').textContent=all.length?`(${all.length} sesi)`:'';
+  document.getElementById('hist-list').innerHTML=all.length?all.map(s=>histHTML(s)).join(''):noData();
+}
+
+/* ── HIST HTML — dengan fix expand-btn onclick ── */
+function histHTML(s){
+  const dec=(s.summary.hit||0)+(s.summary.gagal||0);
+  const wr=dec?((s.summary.hit/dec)*100).toFixed(0)+'%':'—';
+  const wrC=dec?(s.summary.hit/dec>=.5?'var(--green)':'var(--red)'):'var(--text-dim)';
+
+  const rows=(s.sahamList||[]).map(sh=>{
+    const bowEntries=sh.entries.filter(e=>(e.type||'').toUpperCase()==='BOW');
+    const hakaEntries=sh.entries.filter(e=>(e.type||'').toUpperCase()==='HAKA');
+    const noType=sh.entries.filter(e=>!(e.type||'').toUpperCase().match(/^(BOW|HAKA)$/));
+
+    const renderCell=arr=>{
+      if(!arr.length) return '<span style="color:var(--text-dim);font-size:.56rem">—</span>';
+      return arr.map(e=>{
+        const icon={hit:'✅',gagal:'❌',diluar:'🟡',belum:'⏳'}[e.status]||'🟡';
+        return`<div class="mini-status ${e.status}">${icon} ${e.statusLabel||e.status}${e.value?' <b>'+e.value+'</b>':''}${e.highProfit?` <span style="color:var(--orange);font-size:.5rem">(Hi+${e.highProfit})</span>`:''}</div>${e.comment?`<div class="mini-comment">💬 ${e.comment}</div>`:''}`;
+      }).join('');
+    };
+
+    const bowCell=renderCell([...bowEntries,...noType]);
+    const hakaCell=renderCell(hakaEntries);
+
+    return`<tr>
+      <td><span class="emiten-name">${sh.name}</span></td>
+      <td>${bowCell}</td>
+      <td>${hakaCell}</td>
+    </tr>`;
+  }).join('');
+
+  const hasEmiten=(s.sahamList||[]).length>0;
+
+  return`<div class="history-item" id="hi-${s.date}">
+    <div class="history-top" onclick="toggleExp('${s.date}')">
+      <div class="hist-date">📅 ${fmtDate(s.date)}</div>
+      <div class="hist-badges">
+        <span class="badge badge-green">✅ ${s.summary.hit||0}</span>
+        <span class="badge badge-red">❌ ${s.summary.gagal||0}</span>
+        <span class="badge badge-blue">⏳ ${s.summary.belum||0}</span>
+        <span class="badge badge-yellow">🟡 ${s.summary.diluar||0}</span>
+        ${s.summary.avgProfit?`<span class="badge badge-orange">📈 ${s.summary.avgProfit}</span>`:''}
+      </div>
+      <div class="hist-wr" style="color:${wrC}">${wr}</div>
+      ${hasEmiten?`<button class="expand-btn" id="eb-${s.date}" onclick="event.stopPropagation();toggleExp('${s.date}')">▼ rincian</button>`:''}
+    </div>
+    ${hasEmiten?`<div class="history-rincian">
+      <table class="emiten-table">
+        <thead><tr>
+          <th>Emiten</th>
+          <th style="color:var(--green)">📗 BoW</th>
+          <th style="color:var(--purple)">📘 HAKA</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`:''}
+  </div>`;
+}
+
+/* ── TOGGLE EXPAND — fix onclick eksplisit ── */
+function toggleExp(date){
+  const item=document.getElementById('hi-'+date);
+  const btn=document.getElementById('eb-'+date);
+  if(!item||!btn) return;
+  item.classList.toggle('expanded');
+  btn.textContent=item.classList.contains('expanded')?'▲ tutup':'▼ rincian';
+}
+
+/* ── VISUALISASI ── */
+const charts={};
+function killChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+const FONT={family:'JetBrains Mono',size:10};
+const TICK_COLOR='#5a7090';
+const GRID_COLOR='rgba(255,255,255,.04)';
+
+function renderVis(){
+  const all=getSess().slice().reverse();
+  if(!all.length){
+    ['c-wr','c-daily','c-strat','c-donut','c-emiten'].forEach(id=>{killChart(id);});
+    document.getElementById('emiten-tbody').innerHTML='<tr><td colspan="10" style="color:var(--text-dim);text-align:center;padding:28px">Belum ada data</td></tr>';
+    return;
+  }
+  const labels=all.map(s=>shortD(s.date));
+
+  killChart('c-wr');
+  charts['c-wr']=new Chart(document.getElementById('c-wr'),{type:'line',data:{labels,datasets:[
+    {label:'Win Rate %',data:all.map(s=>{const d=(s.summary.hit||0)+(s.summary.gagal||0);return d?+((s.summary.hit/d)*100).toFixed(1):null;}),borderColor:'#00e676',backgroundColor:'rgba(0,230,118,.07)',borderWidth:2.5,pointBackgroundColor:'#00e676',pointRadius:5,pointHoverRadius:8,fill:true,tension:.35,spanGaps:true},
+    {label:'Target 50%',data:all.map(()=>50),borderColor:'rgba(255,71,87,.45)',borderWidth:1.5,borderDash:[6,4],pointRadius:0,fill:false}
+  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.raw!==null?c.raw+'%':'—'}`}}},scales:{x:{ticks:{color:TICK_COLOR,font:FONT},grid:{color:GRID_COLOR}},y:{min:0,max:100,ticks:{color:TICK_COLOR,font:FONT,callback:v=>v+'%'},grid:{color:GRID_COLOR}}}}});
+
+  killChart('c-daily');
+  charts['c-daily']=new Chart(document.getElementById('c-daily'),{type:'bar',data:{labels,datasets:[
+    {label:'Hit ✅',data:all.map(s=>s.summary.hit||0),backgroundColor:'rgba(0,230,118,.75)',stack:'s'},
+    {label:'Gagal ❌',data:all.map(s=>s.summary.gagal||0),backgroundColor:'rgba(255,71,87,.75)',stack:'s'},
+    {label:'Belum ⏳',data:all.map(s=>s.summary.belum||0),backgroundColor:'rgba(79,195,247,.75)',stack:'s'},
+    {label:'Diluar 🟡',data:all.map(s=>s.summary.diluar||0),backgroundColor:'rgba(255,211,42,.75)',stack:'s'}
+  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}}},scales:{x:{stacked:true,ticks:{color:TICK_COLOR,font:FONT},grid:{color:GRID_COLOR}},y:{stacked:true,ticks:{color:TICK_COLOR,font:FONT},grid:{color:GRID_COLOR}}}}});
+
+  killChart('c-strat');
+  const bowWR=[],hakaWR=[];
+  all.forEach(s=>{
+    let bh=0,bg=0,hh=0,hg=0;
+    (s.sahamList||[]).forEach(sh=>(sh.entries||[]).forEach(e=>{
+      const t=(e.type||'').toUpperCase();
+      if(t==='BOW'){if(e.status==='hit')bh++;else if(e.status==='gagal')bg++;}
+      if(t==='HAKA'){if(e.status==='hit')hh++;else if(e.status==='gagal')hg++;}
+    }));
+    bowWR.push((bh+bg)?+((bh/(bh+bg))*100).toFixed(1):null);
+    hakaWR.push((hh+hg)?+((hh/(hh+hg))*100).toFixed(1):null);
+  });
+  charts['c-strat']=new Chart(document.getElementById('c-strat'),{type:'line',data:{labels,datasets:[
+    {label:'BoW WR%',data:bowWR,borderColor:'#00e676',backgroundColor:'rgba(0,230,118,.06)',borderWidth:2,pointRadius:4,pointBackgroundColor:'#00e676',tension:.35,fill:true,spanGaps:true},
+    {label:'HAKA WR%',data:hakaWR,borderColor:'#b39ddb',backgroundColor:'rgba(179,157,219,.06)',borderWidth:2,pointRadius:4,pointBackgroundColor:'#b39ddb',tension:.35,fill:true,spanGaps:true}
+  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.raw!==null?c.raw+'%':'—'}`}}},scales:{x:{ticks:{color:TICK_COLOR,font:FONT},grid:{color:GRID_COLOR}},y:{min:0,max:100,ticks:{color:TICK_COLOR,font:FONT,callback:v=>v+'%'},grid:{color:GRID_COLOR}}}}});
+
+  killChart('c-donut');
+  let th=0,tg=0,tb=0,td=0;
+  all.forEach(s=>{th+=s.summary.hit||0;tg+=s.summary.gagal||0;tb+=s.summary.belum||0;td+=s.summary.diluar||0;});
+  charts['c-donut']=new Chart(document.getElementById('c-donut'),{type:'doughnut',data:{labels:['Hit ✅','Gagal ❌','Belum ⏳','Diluar 🟡'],datasets:[{data:[th,tg,tb,td],backgroundColor:['rgba(0,230,118,.8)','rgba(255,71,87,.8)','rgba(79,195,247,.8)','rgba(255,211,42,.8)'],borderColor:['#00e676','#ff4757','#4fc3f7','#ffd32a'],borderWidth:2,hoverOffset:7}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'right',labels:{color:'#8a9bb5',font:FONT,padding:12}},tooltip:{callbacks:{label:c=>{const tot=c.dataset.data.reduce((a,b)=>a+b,0);return` ${c.label}: ${c.raw} (${tot?((c.raw/tot)*100).toFixed(1)+'%':'—'})`;}}}}}});
+
+  killChart('c-emiten');
+  const es=emitenStats(all).slice(0,10);
+  charts['c-emiten']=new Chart(document.getElementById('c-emiten'),{type:'bar',data:{labels:es.map(e=>e.name),datasets:[
+    {label:'Hit',data:es.map(e=>e.hit),backgroundColor:'rgba(0,230,118,.75)'},
+    {label:'Gagal',data:es.map(e=>e.gagal),backgroundColor:'rgba(255,71,87,.75)'},
+    {label:'Belum',data:es.map(e=>e.belum),backgroundColor:'rgba(79,195,247,.75)'},
+    {label:'Diluar',data:es.map(e=>e.diluar),backgroundColor:'rgba(255,211,42,.75)'}
+  ]},options:{responsive:true,maintainAspectRatio:true,indexAxis:'y',plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}}},scales:{x:{stacked:true,ticks:{color:TICK_COLOR,font:FONT},grid:{color:GRID_COLOR}},y:{stacked:true,ticks:{color:'#c8d8f0',font:{family:'JetBrains Mono',size:11,weight:'bold'}},grid:{color:GRID_COLOR}}}}});
+
+  const allES=emitenStats(all);
+  const tbody=document.getElementById('emiten-tbody');
+  if(!allES.length){tbody.innerHTML='<tr><td colspan="10" style="color:var(--text-dim);text-align:center;padding:20px">Tidak ada data</td></tr>';return;}
+  tbody.innerHTML=allES.map((e,i)=>`<tr>
+    <td style="color:var(--text-dim)">${i+1}</td>
+    <td style="font-weight:700;color:var(--text);letter-spacing:.05em">${e.name}</td>
+    <td style="color:var(--green)">${e.hit}</td>
+    <td style="color:var(--red)">${e.gagal}</td>
+    <td style="color:var(--blue)">${e.belum}</td>
+    <td style="color:var(--yellow)">${e.diluar}</td>
+    <td style="color:var(--green)">${e.bowHit}</td>
+    <td style="color:var(--purple)">${e.hakaHit}</td>
+    <td style="font-weight:700;color:${wrColor(e.wr)}">${e.wr!==null?e.wr+'%':'—'}</td>
+    <td style="min-width:80px"><div class="wr-bar"><div class="wr-fill" style="width:${e.wr||0}%;background:${wrColor(e.wr)}"></div></div></td>
+  </tr>`).join('');
+}
+
+/* ── TOAST ── */
+function showToast(msg,type=''){
+  const t=document.createElement('div');
+  t.className='toast '+(type||'');t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),3200);
+}
+function noData(){return`<div class="no-data"><div style="font-size:2rem;margin-bottom:8px">📋</div>Belum ada data rekap.</div>`;}
+
+/* ── REFRESH ── */
+let isRefreshing=false;
+async function doRefresh(){
+  if(isRefreshing)return;
+  isRefreshing=true;
+  const btn=document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  updateSyncStatus(null);
+  try{
+    const r=await sbFetch();
+    if(!r){updateSyncStatus(false);showToast('❌ Gagal mengambil data.','error');return;}
+    SESSION_DATA=r
+      .sort((a,b)=>a.id-b.id)
+      .map(row=>{try{return JSON.parse(row.payload);}catch{return null;}})
+      .filter(Boolean);
+    updateSyncStatus(true);
+    renderDash();
+    // Re-render tab aktif
+    const activeTab=document.querySelector('.tab-btn.active');
+    if(activeTab){
+      const tabName=activeTab.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+      if(tabName==='history')renderHist();
+      if(tabName==='visual')renderVis();
+    }
+    showToast(`✅ ${SESSION_DATA.length} sesi berhasil dimuat!`,'success');
+  }catch(e){
+    updateSyncStatus(false);
+    showToast('❌ Error: '+e.message,'error');
+  }finally{
+    btn.classList.remove('spinning');
+    isRefreshing=false;
+    const ls=document.getElementById('loading-screen');
+    if(ls)setTimeout(()=>ls.classList.add('hidden'),400);
+  }
+}
+
+/* ── INIT ── */
+document.addEventListener('DOMContentLoaded',()=>{
+  doRefresh();
+});
+</script>
+</body>
+</html>
