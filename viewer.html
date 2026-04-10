@@ -318,349 +318,332 @@ const SB_URL='https://gimyvakdssxtbghumuup.supabase.co';
 const SB_KEY='sb_publishable_DUusXIkPLyErOHmKN16XUA_WYG81BM_';
 const TABLE='rekap_sessions';
 
-// Data tersimpan di memori saja, tidak ke localStorage
 let SESSION_DATA=[];
 
+/* ── FETCH ── */
 async function fetchFromCloud(){
   try{
-    const r=await fetch(`${SB_URL}/rest/v1/${TABLE}?order=id.asc`,{
+    const r=await fetch(`${SB_URL}/rest/v1/${TABLE}?select=*&order=tanggal.desc`,{
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
     });
-    if(!r.ok) throw new Error(r.status);
-    const rows=await r.json();
-    SESSION_DATA=rows
-      .map(row=>{try{return JSON.parse(row.payload);}catch{return null;}})
-      .filter(Boolean)
-      .sort((a,b)=>b.date.localeCompare(a.date));
-    return true;
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    SESSION_DATA=data;
+    return data;
   }catch(e){
     console.error('Fetch error:',e);
-    return false;
+    throw e;
   }
 }
 
-function getSess(){return SESSION_DATA;}
-
-/* ══════════════════════════════════════════════
-   TABS
-══════════════════════════════════════════════ */
-function switchTab(n,btn){
+/* ── SWITCH TAB ── */
+function switchTab(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('page-'+n).classList.add('active');
-  if(btn)btn.classList.add('active');
-  if(n==='dashboard')renderDash();
-  if(n==='history')renderHist();
-  if(n==='visual')renderVis();
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='visual') renderCharts();
 }
 
-/* ══════════════════════════════════════════════
-   SYNC STATUS UI
-══════════════════════════════════════════════ */
-function setSyncStatus(state,label){
-  const dot=document.getElementById('sync-dot');
-  const txt=document.getElementById('sync-txt');
-  dot.className='sync-dot'+{ok:' ok',err:' err',loading:' loading'}[state];
-  txt.textContent=label;
+/* ── TOGGLE EXPAND (dipakai di dashboard & riwayat) ── */
+function toggleExpand(el){
+  const item=el.closest('.history-item');
+  const expanded=item.classList.toggle('expanded');
+  el.textContent=expanded?'▲ tutup':'▼ rincian';
 }
 
-async function doRefresh(){
-  const btn=document.getElementById('refresh-btn');
-  btn.classList.add('spinning');
-  setSyncStatus('loading','Memuat...');
-  const ok=await fetchFromCloud();
-  btn.classList.remove('spinning');
-  if(ok){
-    setSyncStatus('ok',`Diperbarui ${timeNow()}`);
-    renderDash();
-    // Re-render tab aktif
-    const active=document.querySelector('.tab-btn.active');
-    if(active){
-      const tab=active.getAttribute('onclick').match(/'(\w+)'/)[1];
-      if(tab==='history')renderHist();
-      if(tab==='visual')renderVis();
-    }
-    showToast('✅ Data diperbarui dari cloud','success');
-  }else{
-    setSyncStatus('err','Gagal memuat');
-    showToast('❌ Gagal terhubung ke cloud','error');
-  }
+/* ── STATUS HELPER ── */
+function statusIcon(s){
+  if(s==='hit') return '✅';
+  if(s==='gagal') return '❌';
+  if(s==='belum') return '⏳';
+  return '🟡';
+}
+function statusLabel(s){
+  if(s==='hit') return 'Hit Plan';
+  if(s==='gagal') return 'Gagal';
+  if(s==='belum') return 'Belum Hit';
+  return 'Diluar Plan';
 }
 
-function timeNow(){
-  const d=new Date();
-  return`${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-}
-
-/* ══════════════════════════════════════════════
-   HELPERS
-══════════════════════════════════════════════ */
-function fmtDate(s){if(!s)return'—';const[y,m,d]=s.split('-');return`${+d} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][+m-1]} ${y}`;}
-function shortD(s){if(!s)return'';const[,m,d]=s.split('-');return`${d}/${m}`;}
-function wrColor(wr){return wr===null?'var(--text-dim)':wr>=60?'var(--green)':wr>=40?'var(--yellow)':'var(--red)';}
-function noData(){return`<div class="no-data"><div style="font-size:2rem;margin-bottom:8px">📋</div>Belum ada rekap tersedia.</div>`;}
-
-function showToast(msg,type=''){
-  const t=document.createElement('div');
-  t.className='toast '+(type||'');t.textContent=msg;
-  document.body.appendChild(t);setTimeout(()=>t.remove(),3000);
-}
-
-/* ══════════════════════════════════════════════
-   AGG HELPERS
-══════════════════════════════════════════════ */
-function stratStats(all){
-  const bow={hit:0,gagal:0,diluar:0,belum:0},haka={hit:0,gagal:0,diluar:0,belum:0};
-  all.forEach(s=>s.sahamList.forEach(sh=>sh.entries.forEach(e=>{
-    const t=(e.type||'').toUpperCase();
-    if(t==='BOW') bow[e.status]=(bow[e.status]||0)+1;
-    else if(t==='HAKA') haka[e.status]=(haka[e.status]||0)+1;
-  })));
-  return{bow,haka};
-}
-
-function emitenStats(all){
-  const map={};
-  all.forEach(s=>s.sahamList.forEach(sh=>{
-    if(!map[sh.name]) map[sh.name]={hit:0,gagal:0,diluar:0,belum:0,bowHit:0,hakaHit:0,total:0};
-    sh.entries.forEach(e=>{
-      map[sh.name][e.status]=(map[sh.name][e.status]||0)+1;
-      map[sh.name].total++;
-      if(e.status==='hit'){
-        const t=(e.type||'').toUpperCase();
-        if(t==='BOW') map[sh.name].bowHit++;
-        if(t==='HAKA') map[sh.name].hakaHit++;
-      }
+/* ── PARSE SESSION ── */
+function parseSession(row){
+  let sahamArr=[];
+  try{ sahamArr=typeof row.saham==='string'?JSON.parse(row.saham):row.saham||[]; }catch(e){}
+  let hit=0,gagal=0,belum=0,diluar=0;
+  let bowHit=0,bowGagal=0,hakaHit=0,hakaGagal=0;
+  sahamArr.forEach(s=>{
+    (s.entries||[]).forEach(e=>{
+      const st=(e.status||'').toLowerCase();
+      const str=(e.strategi||'').toLowerCase();
+      if(st==='hit'){hit++;if(str==='bow')bowHit++;else if(str==='haka')hakaHit++;}
+      else if(st==='gagal'){gagal++;if(str==='bow')bowGagal++;else hakaGagal++;}
+      else if(st==='belum')belum++;
+      else diluar++;
     });
-  }));
-  return Object.entries(map).map(([name,d])=>({
-    name,...d,wr:(d.hit+d.gagal)?+((d.hit/(d.hit+d.gagal))*100).toFixed(1):null
-  })).sort((a,b)=>b.total-a.total);
+  });
+  const total=hit+gagal;
+  const wr=total>0?Math.round(hit/total*100):0;
+  return{hit,gagal,belum,diluar,wr,sahamArr,bowHit,bowGagal,hakaHit,hakaGagal};
 }
 
-/* ══════════════════════════════════════════════
-   DASHBOARD
-══════════════════════════════════════════════ */
-function renderDash(){
-  const all=getSess();
-  let tot={hit:0,gagal:0,diluar:0,belum:0};
-  all.forEach(s=>{tot.hit+=(s.summary.hit||0);tot.gagal+=(s.summary.gagal||0);tot.diluar+=(s.summary.diluar||0);tot.belum+=(s.summary.belum||0);});
-  const dec=tot.hit+tot.gagal,grand=dec+tot.diluar+tot.belum;
-  const wr=dec?((tot.hit/dec)*100).toFixed(1):null;
-  document.getElementById('s-winrate').textContent=wr?wr+'%':'—';
-  document.getElementById('s-hit').textContent=tot.hit;
-  document.getElementById('s-gagal').textContent=tot.gagal;
-  document.getElementById('s-belum').textContent=tot.belum;
-  document.getElementById('s-diluar').textContent=tot.diluar;
-  document.getElementById('s-sesi').textContent=all.length;
-  document.getElementById('bar-wr').textContent=wr?wr+'%':'— %';
-  document.getElementById('bar-lbl').textContent=grand?`${grand} total plan dari ${all.length} sesi`:'belum ada data';
-  if(grand){
-    document.getElementById('bar-hit').style.width=(tot.hit/grand*100)+'%';
-    document.getElementById('bar-gagal').style.width=(tot.gagal/grand*100)+'%';
-    document.getElementById('bar-belum').style.width=(tot.belum/grand*100)+'%';
-    document.getElementById('bar-diluar').style.width=(tot.diluar/grand*100)+'%';
-  }
-  const{bow,haka}=stratStats(all);
-  const bwd=bow.hit+bow.gagal,hkd=haka.hit+haka.gagal;
-  document.getElementById('bow-hit').textContent=bow.hit;
-  document.getElementById('bow-gagal').textContent=bow.gagal;
-  document.getElementById('bow-belum').textContent=bow.belum;
-  document.getElementById('bow-diluar').textContent=bow.diluar;
-  document.getElementById('bow-wr').textContent=bwd?((bow.hit/bwd)*100).toFixed(1)+'%':'—';
-  document.getElementById('haka-hit').textContent=haka.hit;
-  document.getElementById('haka-gagal').textContent=haka.gagal;
-  document.getElementById('haka-belum').textContent=haka.belum;
-  document.getElementById('haka-diluar').textContent=haka.diluar;
-  document.getElementById('haka-wr').textContent=hkd?((haka.hit/hkd)*100).toFixed(1)+'%':'—';
-  const el=document.getElementById('db-recent');
-  const recent=all.slice(0,5);
-  el.innerHTML=recent.length?'<div class="history-list">'+recent.map(s=>histHTML(s)).join('')+'</div>':noData();
+/* ── FORMAT DATE ── */
+function fmtDate(d){
+  if(!d)return'—';
+  const dt=new Date(d);
+  return dt.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
 }
 
-/* ══════════════════════════════════════════════
-   HISTORY
-══════════════════════════════════════════════ */
-function renderHist(){
-  const all=getSess();
-  document.getElementById('hist-count').textContent=all.length?`(${all.length} sesi)`:'';
-  document.getElementById('hist-list').innerHTML=all.length?all.map(s=>histHTML(s)).join(''):noData();
+/* ── RENDER RINCIAN (tabel emiten per sesi) ── */
+function renderRincian(sahamArr){
+  if(!sahamArr||sahamArr.length===0) return '<div style="font-size:.65rem;color:var(--text-dim);padding:8px 0">Tidak ada data emiten.</div>';
+  let html='<table class="emiten-table"><thead><tr><th>Emiten</th><th>BoW</th><th>HAKA</th></tr></thead><tbody>';
+  sahamArr.forEach(s=>{
+    const entries=s.entries||[];
+    const bow=entries.find(e=>(e.strategi||'').toLowerCase()==='bow');
+    const haka=entries.find(e=>(e.strategi||'').toLowerCase()==='haka');
+    function cellHtml(e){
+      if(!e)return'<td style="color:var(--text-dim);font-size:.6rem">—</td>';
+      const st=(e.status||'belum').toLowerCase();
+      const pct=e.persen?` +${e.persen}%`:'';
+      const comment=e.komentar?`<div class="mini-comment">💬 ${e.komentar}</div>`:'';
+      const hi=e.hi_persen?` (Hi++${e.hi_persen}%)`:''
+      return `<td><span class="mini-status ${st}">${statusIcon(st)} ${statusLabel(st)}${pct}${hi}</span>${comment}</td>`;
+    }
+    html+=`<tr><td class="emiten-name">${s.nama||s.name||'?'}</td>${cellHtml(bow)}${cellHtml(haka)}</tr>`;
+  });
+  html+='</tbody></table>';
+  return html;
 }
 
-function histHTML(s){
-  const dec=(s.summary.hit||0)+(s.summary.gagal||0);
-  const wr=dec?((s.summary.hit/dec)*100).toFixed(0)+'%':'—';
-  const wrC=dec?(s.summary.hit/dec>=.5?'var(--green)':'var(--red)'):'var(--text-dim)';
+/* ── RENDER HISTORY ITEM ── */
+function renderHistoryItem(row, showDelete=false){
+  const p=parseSession(row);
+  const wrColor=p.wr>=80?'var(--green)':p.wr>=60?'var(--yellow)':'var(--red)';
+  const persen=row.persen_porto?`<span class="badge badge-orange">📈 ${row.persen_porto>0?'+':''}${row.persen_porto}%</span>`:'';
+  const rincianHtml=renderRincian(p.sahamArr);
 
-  const rows=(s.sahamList||[]).map(sh=>{
-    const bowEntries=sh.entries.filter(e=>(e.type||'').toUpperCase()==='BOW');
-    const hakaEntries=sh.entries.filter(e=>(e.type||'').toUpperCase()==='HAKA');
-    const noType=sh.entries.filter(e=>!(e.type||'').toUpperCase().match(/^(BOW|HAKA)$/));
-    const renderCell=arr=>{
-      if(!arr.length) return '<span style="color:var(--text-dim);font-size:.56rem">—</span>';
-      return arr.map(e=>{
-        const icon={hit:'✅',gagal:'❌',diluar:'🟡',belum:'⏳'}[e.status]||'🟡';
-        return`<div class="mini-status ${e.status}">${icon} ${e.statusLabel||e.status}${e.value?' <b>'+e.value+'</b>':''}${e.highProfit?` <span style="color:var(--orange);font-size:.5rem">(Hi+${e.highProfit})</span>`:''}</div>${e.comment?`<div class="mini-comment">💬 ${e.comment}</div>`:''}`;
-      }).join('');
-    };
-    return`<tr>
-      <td><span class="emiten-name">${sh.name}</span></td>
-      <td>${renderCell([...bowEntries,...noType])}</td>
-      <td>${renderCell(hakaEntries)}</td>
-    </tr>`;
-  }).join('');
-
-  const hasEmiten=(s.sahamList||[]).length>0;
-  return`<div class="history-item" id="hi-${s.date}">
-    <div class="history-top" onclick="toggleExp('${s.date}')">
-      <div class="hist-date">📅 ${fmtDate(s.date)}</div>
+  return `
+  <div class="history-item">
+    <div class="history-top" onclick="toggleExpand(this)">
+      <div class="hist-date">📅 ${fmtDate(row.tanggal)}</div>
       <div class="hist-badges">
-        <span class="badge badge-green">✅ ${s.summary.hit||0}</span>
-        <span class="badge badge-red">❌ ${s.summary.gagal||0}</span>
-        <span class="badge badge-blue">⏳ ${s.summary.belum||0}</span>
-        <span class="badge badge-yellow">🟡 ${s.summary.diluar||0}</span>
-        ${s.summary.avgProfit?`<span class="badge badge-orange">📈 ${s.summary.avgProfit}</span>`:''}
+        <span class="badge badge-green">✅ ${p.hit}</span>
+        <span class="badge badge-red">❌ ${p.gagal}</span>
+        <span class="badge badge-blue">⏳ ${p.belum}</span>
+        <span class="badge badge-yellow">🟡 ${p.diluar}</span>
+        ${persen}
       </div>
-      <div class="hist-wr" style="color:${wrC}">${wr}</div>
-      ${hasEmiten?`<button class="expand-btn" id="eb-${s.date}">▼ rincian</button>`:''}
+      <div class="hist-wr" style="color:${wrColor}">${p.wr}%</div>
+      <button class="expand-btn" onclick="event.stopPropagation();toggleExpand(this.closest('.history-item').querySelector('.history-top'))">▼ rincian</button>
     </div>
-    ${hasEmiten?`<div class="history-rincian">
-      <table class="emiten-table">
-        <thead><tr>
-          <th>Emiten</th>
-          <th style="color:var(--green)">📗 BoW</th>
-          <th style="color:var(--purple)">📘 HAKA</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`:''}
+    <div class="history-rincian">${rincianHtml}</div>
   </div>`;
 }
 
-function toggleExp(date){
-  const item=document.getElementById('hi-'+date);
-  const btn=document.getElementById('eb-'+date);
-  if(!item||!btn) return;
-  item.classList.toggle('expanded');
-  btn.textContent=item.classList.contains('expanded')?'▲ tutup':'▼ rincian';
-}
+/* ── RENDER DASHBOARD ── */
+function renderDashboard(){
+  const data=SESSION_DATA;
+  let totHit=0,totGagal=0,totBelum=0,totDiluar=0;
+  let bowHit=0,bowGagal=0,bowBelum=0,bowDiluar=0;
+  let hakaHit=0,hakaGagal=0,hakaBelum=0,hakaDiluar=0;
 
-/* ══════════════════════════════════════════════
-   VISUALISASI
-══════════════════════════════════════════════ */
-const charts={};
-function killChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
-const FONT={family:'JetBrains Mono',size:10};
-const TICK='#5a7090';
-const GRID='rgba(255,255,255,.04)';
-
-function renderVis(){
-  const all=getSess().slice().reverse();
-  if(!all.length){
-    ['c-wr','c-daily','c-strat','c-donut','c-emiten'].forEach(id=>killChart(id));
-    document.getElementById('emiten-tbody').innerHTML='<tr><td colspan="10" style="color:var(--text-dim);text-align:center;padding:28px">Belum ada data</td></tr>';
-    return;
-  }
-  const labels=all.map(s=>shortD(s.date));
-
-  killChart('c-wr');
-  charts['c-wr']=new Chart(document.getElementById('c-wr'),{type:'line',data:{labels,datasets:[
-    {label:'Win Rate %',data:all.map(s=>{const d=(s.summary.hit||0)+(s.summary.gagal||0);return d?+((s.summary.hit/d)*100).toFixed(1):null;}),borderColor:'#00e676',backgroundColor:'rgba(0,230,118,.07)',borderWidth:2.5,pointBackgroundColor:'#00e676',pointRadius:5,pointHoverRadius:8,fill:true,tension:.35,spanGaps:true},
-    {label:'Target 50%',data:all.map(()=>50),borderColor:'rgba(255,71,87,.45)',borderWidth:1.5,borderDash:[6,4],pointRadius:0,fill:false}
-  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}}},scales:{x:{ticks:{color:TICK,font:FONT},grid:{color:GRID}},y:{min:0,max:100,ticks:{color:TICK,font:FONT,callback:v=>v+'%'},grid:{color:GRID}}}}});
-
-  killChart('c-daily');
-  charts['c-daily']=new Chart(document.getElementById('c-daily'),{type:'bar',data:{labels,datasets:[
-    {label:'Hit ✅',data:all.map(s=>s.summary.hit||0),backgroundColor:'rgba(0,230,118,.75)',stack:'s'},
-    {label:'Gagal ❌',data:all.map(s=>s.summary.gagal||0),backgroundColor:'rgba(255,71,87,.75)',stack:'s'},
-    {label:'Belum ⏳',data:all.map(s=>s.summary.belum||0),backgroundColor:'rgba(79,195,247,.75)',stack:'s'},
-    {label:'Diluar 🟡',data:all.map(s=>s.summary.diluar||0),backgroundColor:'rgba(255,211,42,.75)',stack:'s'}
-  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}}},scales:{x:{stacked:true,ticks:{color:TICK,font:FONT},grid:{color:GRID}},y:{stacked:true,ticks:{color:TICK,font:FONT},grid:{color:GRID}}}}});
-
-  killChart('c-strat');
-  const bowWR=[],hakaWR=[];
-  all.forEach(s=>{
-    let bh=0,bg=0,hh=0,hg=0;
-    s.sahamList.forEach(sh=>sh.entries.forEach(e=>{
-      const t=(e.type||'').toUpperCase();
-      if(t==='BOW'){if(e.status==='hit')bh++;else if(e.status==='gagal')bg++;}
-      if(t==='HAKA'){if(e.status==='hit')hh++;else if(e.status==='gagal')hg++;}
+  data.forEach(row=>{
+    const p=parseSession(row);
+    totHit+=p.hit;totGagal+=p.gagal;totBelum+=p.belum;totDiluar+=p.diluar;
+    bowHit+=p.bowHit;bowGagal+=p.bowGagal;
+    hakaHit+=p.hakaHit;hakaGagal+=p.hakaGagal;
+    // bow/haka belum & diluar (approximate from saham)
+    p.sahamArr.forEach(s=>(s.entries||[]).forEach(e=>{
+      const st=(e.status||'').toLowerCase();
+      const str=(e.strategi||'').toLowerCase();
+      if(st==='belum'){if(str==='bow')bowBelum++;else hakaBelum++;}
+      if(st==='diluar'||!['hit','gagal','belum'].includes(st)){if(str==='bow')bowDiluar++;else hakaDiluar++;}
     }));
-    bowWR.push((bh+bg)?+((bh/(bh+bg))*100).toFixed(1):null);
-    hakaWR.push((hh+hg)?+((hh/(hh+hg))*100).toFixed(1):null);
   });
-  charts['c-strat']=new Chart(document.getElementById('c-strat'),{type:'line',data:{labels,datasets:[
-    {label:'BoW WR%',data:bowWR,borderColor:'#00e676',backgroundColor:'rgba(0,230,118,.06)',borderWidth:2,pointRadius:4,pointBackgroundColor:'#00e676',tension:.35,fill:true,spanGaps:true},
-    {label:'HAKA WR%',data:hakaWR,borderColor:'#b39ddb',backgroundColor:'rgba(179,157,219,.06)',borderWidth:2,pointRadius:4,pointBackgroundColor:'#b39ddb',tension:.35,fill:true,spanGaps:true}
-  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}}},scales:{x:{ticks:{color:TICK,font:FONT},grid:{color:GRID}},y:{min:0,max:100,ticks:{color:TICK,font:FONT,callback:v=>v+'%'},grid:{color:GRID}}}}});
 
-  killChart('c-donut');
-  let th=0,tg=0,tb=0,td=0;
-  all.forEach(s=>{th+=s.summary.hit||0;tg+=s.summary.gagal||0;tb+=s.summary.belum||0;td+=s.summary.diluar||0;});
-  charts['c-donut']=new Chart(document.getElementById('c-donut'),{type:'doughnut',data:{labels:['Hit ✅','Gagal ❌','Belum ⏳','Diluar 🟡'],datasets:[{data:[th,tg,tb,td],backgroundColor:['rgba(0,230,118,.8)','rgba(255,71,87,.8)','rgba(79,195,247,.8)','rgba(255,211,42,.8)'],borderColor:['#00e676','#ff4757','#4fc3f7','#ffd32a'],borderWidth:2,hoverOffset:7}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'right',labels:{color:'#8a9bb5',font:FONT,padding:12}}}}});
+  const total=totHit+totGagal;
+  const wr=total>0?(totHit/total*100).toFixed(1)+'%':'—';
+  const tot=totHit+totGagal+totBelum+totDiluar||1;
 
-  killChart('c-emiten');
-  const es=emitenStats(all).slice(0,10);
-  charts['c-emiten']=new Chart(document.getElementById('c-emiten'),{type:'bar',data:{labels:es.map(e=>e.name),datasets:[
-    {label:'Hit',data:es.map(e=>e.hit),backgroundColor:'rgba(0,230,118,.75)'},
-    {label:'Gagal',data:es.map(e=>e.gagal),backgroundColor:'rgba(255,71,87,.75)'},
-    {label:'Belum',data:es.map(e=>e.belum),backgroundColor:'rgba(79,195,247,.75)'},
-    {label:'Diluar',data:es.map(e=>e.diluar),backgroundColor:'rgba(255,211,42,.75)'}
-  ]},options:{responsive:true,maintainAspectRatio:true,indexAxis:'y',plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}}},scales:{x:{stacked:true,ticks:{color:TICK,font:FONT},grid:{color:GRID}},y:{stacked:true,ticks:{color:'#c8d8f0',font:{family:'JetBrains Mono',size:11,weight:'bold'}},grid:{color:GRID}}}}});
+  document.getElementById('s-winrate').textContent=wr;
+  document.getElementById('s-hit').textContent=totHit;
+  document.getElementById('s-gagal').textContent=totGagal;
+  document.getElementById('s-belum').textContent=totBelum;
+  document.getElementById('s-diluar').textContent=totDiluar;
+  document.getElementById('s-sesi').textContent=data.length;
+  document.getElementById('bar-lbl').textContent=`${totHit+totGagal+totBelum+totDiluar} total entries`;
+  document.getElementById('bar-wr').textContent=wr;
+  setTimeout(()=>{
+    document.getElementById('bar-hit').style.width=(totHit/tot*100)+'%';
+    document.getElementById('bar-gagal').style.width=(totGagal/tot*100)+'%';
+    document.getElementById('bar-belum').style.width=(totBelum/tot*100)+'%';
+    document.getElementById('bar-diluar').style.width=(totDiluar/tot*100)+'%';
+  },100);
 
-  const allES=emitenStats(all);
-  const tbody=document.getElementById('emiten-tbody');
-  if(!allES.length){tbody.innerHTML='<tr><td colspan="10" style="color:var(--text-dim);text-align:center;padding:20px">Tidak ada data</td></tr>';return;}
-  tbody.innerHTML=allES.map((e,i)=>`<tr>
-    <td style="color:var(--text-dim)">${i+1}</td>
-    <td style="font-weight:700;color:var(--text);letter-spacing:.05em">${e.name}</td>
-    <td style="color:var(--green)">${e.hit}</td>
-    <td style="color:var(--red)">${e.gagal}</td>
-    <td style="color:var(--blue)">${e.belum}</td>
-    <td style="color:var(--yellow)">${e.diluar}</td>
-    <td style="color:var(--green)">${e.bowHit}</td>
-    <td style="color:var(--purple)">${e.hakaHit}</td>
-    <td style="font-weight:700;color:${wrColor(e.wr)}">${e.wr!==null?e.wr+'%':'—'}</td>
-    <td style="min-width:80px"><div class="wr-bar"><div class="wr-fill" style="width:${e.wr||0}%;background:${wrColor(e.wr)}"></div></div></td>
-  </tr>`).join('');
+  // BoW
+  const bowTotal=bowHit+bowGagal;
+  document.getElementById('bow-hit').textContent=bowHit;
+  document.getElementById('bow-gagal').textContent=bowGagal;
+  document.getElementById('bow-belum').textContent=bowBelum;
+  document.getElementById('bow-diluar').textContent=bowDiluar;
+  document.getElementById('bow-wr').textContent=bowTotal>0?(bowHit/bowTotal*100).toFixed(1)+'%':'—';
+
+  // HAKA
+  const hakaTotal=hakaHit+hakaGagal;
+  document.getElementById('haka-hit').textContent=hakaHit;
+  document.getElementById('haka-gagal').textContent=hakaGagal;
+  document.getElementById('haka-belum').textContent=hakaBelum;
+  document.getElementById('haka-diluar').textContent=hakaDiluar;
+  document.getElementById('haka-wr').textContent=hakaTotal>0?(hakaHit/hakaTotal*100).toFixed(1)+'%':'—';
+
+  // Rekap terbaru (3 sesi teratas)
+  const recent=data.slice(0,3);
+  document.getElementById('db-recent').innerHTML=recent.length
+    ?'<div class="history-list">'+recent.map(r=>renderHistoryItem(r)).join('')+'</div>'
+    :'<div class="no-data">Belum ada data rekap.</div>';
 }
 
-/* ══════════════════════════════════════════════
-   INIT — langsung pull dari cloud saat buka
-══════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded',async()=>{
-  setSyncStatus('loading','Memuat data...');
-  const ok=await fetchFromCloud();
-  // Sembunyikan loading screen
-  setTimeout(()=>{
-    document.getElementById('loading-screen').classList.add('hidden');
-    setTimeout(()=>document.getElementById('loading-screen').remove(),500);
-  },ok?400:800);
+/* ── RENDER RIWAYAT ── */
+function renderHistory(){
+  const data=SESSION_DATA;
+  document.getElementById('hist-count').textContent=`(${data.length} SESI)`;
+  document.getElementById('hist-list').innerHTML=data.length
+    ?data.map(r=>renderHistoryItem(r)).join('')
+    :'<div class="no-data">Belum ada data riwayat.</div>';
+}
 
-  if(ok){
-    setSyncStatus('ok',`${timeNow()}`);
-    renderDash();
-  }else{
-    setSyncStatus('err','Gagal terhubung');
-    showToast('❌ Gagal terhubung ke cloud. Cek koneksi internet.','error');
-    document.getElementById('db-recent').innerHTML=noData();
+/* ── RENDER CHARTS ── */
+let chartsRendered=false;
+let chartInstances={};
+function renderCharts(){
+  if(!SESSION_DATA.length||chartsRendered)return;
+  chartsRendered=true;
+  const data=[...SESSION_DATA].reverse();
+
+  const labels=data.map(r=>fmtDate(r.tanggal));
+  const wrArr=data.map(r=>{const p=parseSession(r);const t=p.hit+p.gagal;return t>0?+(p.hit/t*100).toFixed(1):null;});
+  const hitArr=data.map(r=>parseSession(r).hit);
+  const gagalArr=data.map(r=>parseSession(r).gagal);
+  const belumArr=data.map(r=>parseSession(r).belum);
+  const diluarArr=data.map(r=>parseSession(r).diluar);
+  const bowWrArr=data.map(r=>{const p=parseSession(r);const t=p.bowHit+p.bowGagal;return t>0?+(p.bowHit/t*100).toFixed(1):null;});
+  const hakaWrArr=data.map(r=>{const p=parseSession(r);const t=p.hakaHit+p.hakaGagal;return t>0?+(p.hakaHit/t*100).toFixed(1):null;});
+
+  const cfg={responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8a9bb5',font:{size:10}}}}};
+  const gridCfg={color:'rgba(30,45,69,.7)'};
+
+  // WR trend
+  new Chart(document.getElementById('c-wr'),{type:'line',data:{labels,datasets:[{label:'Win Rate %',data:wrArr,borderColor:'#00e676',backgroundColor:'rgba(0,230,118,.1)',tension:.35,fill:true,spanGaps:true,pointRadius:4,pointBackgroundColor:'#00e676'}]},options:{...cfg,scales:{x:{ticks:{color:'#4a6080',font:{size:9}},grid:gridCfg},y:{ticks:{color:'#4a6080',font:{size:9},callback:v=>v+'%'},grid:gridCfg,min:0,max:100}}}});
+
+  // Daily stacked bar
+  new Chart(document.getElementById('c-daily'),{type:'bar',data:{labels,datasets:[
+    {label:'Hit',data:hitArr,backgroundColor:'rgba(0,230,118,.7)'},
+    {label:'Gagal',data:gagalArr,backgroundColor:'rgba(255,71,87,.7)'},
+    {label:'Belum',data:belumArr,backgroundColor:'rgba(79,195,247,.7)'},
+    {label:'Diluar',data:diluarArr,backgroundColor:'rgba(255,211,42,.7)'},
+  ]},options:{...cfg,scales:{x:{stacked:true,ticks:{color:'#4a6080',font:{size:9}},grid:gridCfg},y:{stacked:true,ticks:{color:'#4a6080',font:{size:9}},grid:gridCfg}}}});
+
+  // BoW vs HAKA line
+  new Chart(document.getElementById('c-strat'),{type:'line',data:{labels,datasets:[
+    {label:'BoW WR%',data:bowWrArr,borderColor:'#00e676',backgroundColor:'transparent',tension:.35,spanGaps:true,pointRadius:3},
+    {label:'HAKA WR%',data:hakaWrArr,borderColor:'#b39ddb',backgroundColor:'transparent',tension:.35,spanGaps:true,pointRadius:3},
+  ]},options:{...cfg,scales:{x:{ticks:{color:'#4a6080',font:{size:9}},grid:gridCfg},y:{ticks:{color:'#4a6080',font:{size:9},callback:v=>v+'%'},grid:gridCfg,min:0,max:100}}}});
+
+  // Donut
+  let tH=0,tG=0,tB=0,tD=0;
+  SESSION_DATA.forEach(r=>{const p=parseSession(r);tH+=p.hit;tG+=p.gagal;tB+=p.belum;tD+=p.diluar;});
+  new Chart(document.getElementById('c-donut'),{type:'doughnut',data:{labels:['Hit','Gagal','Belum','Diluar'],datasets:[{data:[tH,tG,tB,tD],backgroundColor:['rgba(0,230,118,.8)','rgba(255,71,87,.8)','rgba(79,195,247,.8)','rgba(255,211,42,.8)'],borderWidth:0}]},options:{...cfg}});
+
+  // Top emiten bar
+  const emitenMap={};
+  SESSION_DATA.forEach(r=>{
+    parseSession(r).sahamArr.forEach(s=>{
+      const nm=(s.nama||s.name||'?').toUpperCase();
+      emitenMap[nm]=(emitenMap[nm]||0)+1;
+    });
+  });
+  const sorted=Object.entries(emitenMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  new Chart(document.getElementById('c-emiten'),{type:'bar',data:{labels:sorted.map(e=>e[0]),datasets:[{label:'Frekuensi',data:sorted.map(e=>e[1]),backgroundColor:'rgba(79,195,247,.7)'}]},options:{...cfg,indexAxis:'y',scales:{x:{ticks:{color:'#4a6080',font:{size:9}},grid:gridCfg},y:{ticks:{color:'#4a6080',font:{size:9}},grid:gridCfg}}}});
+
+  // Emiten table
+  const emitenFull={};
+  SESSION_DATA.forEach(r=>{
+    parseSession(r).sahamArr.forEach(s=>{
+      const nm=(s.nama||s.name||'?').toUpperCase();
+      if(!emitenFull[nm])emitenFull[nm]={hit:0,gagal:0,belum:0,diluar:0,bowHit:0,hakaHit:0};
+      (s.entries||[]).forEach(e=>{
+        const st=(e.status||'').toLowerCase();
+        const str=(e.strategi||'').toLowerCase();
+        if(st==='hit'){emitenFull[nm].hit++;if(str==='bow')emitenFull[nm].bowHit++;else emitenFull[nm].hakaHit++;}
+        else if(st==='gagal')emitenFull[nm].gagal++;
+        else if(st==='belum')emitenFull[nm].belum++;
+        else emitenFull[nm].diluar++;
+      });
+    });
+  });
+  const eSorted=Object.entries(emitenFull).sort((a,b)=>(b[1].hit+b[1].gagal)-(a[1].hit+a[1].gagal));
+  document.getElementById('emiten-tbody').innerHTML=eSorted.map(([nm,v],i)=>{
+    const tot=v.hit+v.gagal;const wr=tot>0?+(v.hit/tot*100).toFixed(1):0;
+    return `<tr>
+      <td style="color:var(--text-dim)">${i+1}</td>
+      <td class="emiten-name">${nm}</td>
+      <td style="color:var(--green)">${v.hit}</td>
+      <td style="color:var(--red)">${v.gagal}</td>
+      <td style="color:var(--blue)">${v.belum}</td>
+      <td style="color:var(--yellow)">${v.diluar}</td>
+      <td style="color:var(--green)">${v.bowHit}</td>
+      <td style="color:var(--purple)">${v.hakaHit}</td>
+      <td style="color:${wr>=80?'var(--green)':wr>=60?'var(--yellow)':'var(--red)'}">${tot>0?wr+'%':'—'}</td>
+      <td><div class="wr-bar"><div class="wr-fill" style="width:${wr}%;background:${wr>=80?'var(--green)':wr>=60?'var(--yellow)':'var(--red)'}"></div></div></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── SYNC STATUS ── */
+function setSyncStatus(state,txt){
+  const dot=document.getElementById('sync-dot');
+  const span=document.getElementById('sync-txt');
+  dot.className='sync-dot'+(state?' '+state:'');
+  span.textContent=txt;
+}
+
+/* ── TOAST ── */
+function toast(msg,type=''){
+  const t=document.createElement('div');
+  t.className='toast'+(type?' '+type:'');
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
+/* ── REFRESH ── */
+let isRefreshing=false;
+async function doRefresh(){
+  if(isRefreshing)return;
+  isRefreshing=true;
+  chartsRendered=false;
+  const btn=document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  setSyncStatus('loading','Memuat...');
+  try{
+    await fetchFromCloud();
+    renderDashboard();
+    renderHistory();
+    setSyncStatus('ok',new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}));
+    toast('Data berhasil diperbarui','success');
+  }catch(e){
+    setSyncStatus('err','Gagal');
+    toast('Gagal mengambil data: '+e.message,'error');
+  }finally{
+    btn.classList.remove('spinning');
+    isRefreshing=false;
+    setTimeout(()=>{const ls=document.getElementById('loading-screen');if(ls)ls.classList.add('hidden');},400);
   }
+}
 
-  // Auto-refresh setiap 5 menit
-  setInterval(async()=>{
-    const ok=await fetchFromCloud();
-    if(ok){
-      setSyncStatus('ok',`${timeNow()}`);
-      renderDash();
-      const active=document.querySelector('.tab-btn.active');
-      if(active){
-        const tab=active.getAttribute('onclick').match(/'(\w+)'/)[1];
-        if(tab==='history')renderHist();
-        if(tab==='visual')renderVis();
-      }
-    }
-  },5*60*1000);
-});
+/* ── INIT ── */
+doRefresh();
 </script>
 </body>
 </html>
