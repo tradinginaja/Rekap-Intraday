@@ -263,8 +263,6 @@ select option{background:var(--card)}
     <div class="stat-card green"><div class="stat-label">Win Rate</div><div class="stat-value" id="s-winrate">—</div><div class="stat-sub">Hit ÷ (Hit+Gagal)</div></div>
     <div class="stat-card green"><div class="stat-label">Total Hit ✅</div><div class="stat-value" id="s-hit">0</div><div class="stat-sub">semua sesi</div></div>
     <div class="stat-card red"><div class="stat-label">Total Gagal ❌</div><div class="stat-value" id="s-gagal">0</div><div class="stat-sub">semua sesi</div></div>
-    <div class="stat-card blue"><div class="stat-label">Belum Hit ⏳</div><div class="stat-value" id="s-belum">0</div><div class="stat-sub">semua sesi</div></div>
-    <div class="stat-card yellow"><div class="stat-label">Diluar Plan 🟡</div><div class="stat-value" id="s-diluar">0</div><div class="stat-sub">semua sesi</div></div>
     <div class="stat-card orange"><div class="stat-label">Total Sesi</div><div class="stat-value" id="s-sesi">0</div><div class="stat-sub">hari tersimpan</div></div>
   </div>
   <div class="winrate-bar-wrap">
@@ -275,14 +273,10 @@ select option{background:var(--card)}
     <div class="bar-track">
       <div class="bar-hit" id="bar-hit" style="width:0%"></div>
       <div class="bar-gagal" id="bar-gagal" style="width:0%"></div>
-      <div class="bar-belum" id="bar-belum" style="width:0%"></div>
-      <div class="bar-diluar" id="bar-diluar" style="width:0%"></div>
     </div>
     <div class="bar-legend">
       <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Hit</div>
       <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Gagal</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Belum</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Diluar</div>
     </div>
   </div>
   <div class="strategy-grid">
@@ -323,7 +317,7 @@ select option{background:var(--card)}
   <div class="chart-grid">
     <div class="chart-card">
       <div class="chart-title">📊 Distribusi per Hari</div>
-      <div class="chart-sub">Komposisi hit/gagal/belum/diluar per sesi</div>
+      <div class="chart-sub">Komposisi hit/gagal per sesi</div>
       <canvas id="c-daily"></canvas>
     </div>
     <div class="chart-card">
@@ -822,16 +816,12 @@ function renderDash(){
   document.getElementById('s-winrate').textContent=wr?wr+'%':'—';
   document.getElementById('s-hit').textContent=tot.hit;
   document.getElementById('s-gagal').textContent=tot.gagal;
-  document.getElementById('s-belum').textContent=tot.belum;
-  document.getElementById('s-diluar').textContent=tot.diluar;
   document.getElementById('s-sesi').textContent=all.length;
   document.getElementById('bar-wr').textContent=wr?wr+'%':'— %';
-  document.getElementById('bar-lbl').textContent=grand?`${grand} total plan dari ${all.length} sesi`:'belum ada data';
-  if(grand){
-    document.getElementById('bar-hit').style.width=(tot.hit/grand*100)+'%';
-    document.getElementById('bar-gagal').style.width=(tot.gagal/grand*100)+'%';
-    document.getElementById('bar-belum').style.width=(tot.belum/grand*100)+'%';
-    document.getElementById('bar-diluar').style.width=(tot.diluar/grand*100)+'%';
+  document.getElementById('bar-lbl').textContent=dec?`${dec} plan (Hit+Gagal) dari ${all.length} sesi`:'belum ada data';
+  if(dec){
+    document.getElementById('bar-hit').style.width=(tot.hit/dec*100)+'%';
+    document.getElementById('bar-gagal').style.width=(tot.gagal/dec*100)+'%';
   }
   const{bow,haka}=stratStats(all);
   const bwd=bow.hit+bow.gagal,hkd=haka.hit+haka.gagal;
@@ -962,9 +952,7 @@ function renderVis(){
   killChart('c-daily');
   charts['c-daily']=new Chart(document.getElementById('c-daily'),{type:'bar',data:{labels,datasets:[
     {label:'Hit ✅',data:all.map(s=>s.summary.hit||0),backgroundColor:'rgba(0,230,118,.75)',stack:'s'},
-    {label:'Gagal ❌',data:all.map(s=>s.summary.gagal||0),backgroundColor:'rgba(255,71,87,.75)',stack:'s'},
-    {label:'Belum ⏳',data:all.map(s=>s.summary.belum||0),backgroundColor:'rgba(79,195,247,.75)',stack:'s'},
-    {label:'Diluar 🟡',data:all.map(s=>s.summary.diluar||0),backgroundColor:'rgba(255,211,42,.75)',stack:'s'}
+    {label:'Gagal ❌',data:all.map(s=>s.summary.gagal||0),backgroundColor:'rgba(255,71,87,.75)',stack:'s'}
   ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}}},scales:{x:{stacked:true,ticks:{color:TICK_COLOR,font:FONT},grid:{color:GRID_COLOR}},y:{stacked:true,ticks:{color:TICK_COLOR,font:FONT},grid:{color:GRID_COLOR}}}}});
 
   killChart('c-strat');
@@ -985,17 +973,15 @@ function renderVis(){
   ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.raw!==null?c.raw+'%':'—'}`}}},scales:{x:{ticks:{color:TICK_COLOR,font:FONT},grid:{color:GRID_COLOR}},y:{min:0,max:100,ticks:{color:TICK_COLOR,font:FONT,callback:v=>v+'%'},grid:{color:GRID_COLOR}}}}});
 
   killChart('c-donut');
-  let th=0,tg=0,tb=0,td=0;
-  all.forEach(s=>{th+=s.summary.hit||0;tg+=s.summary.gagal||0;tb+=s.summary.belum||0;td+=s.summary.diluar||0;});
-  charts['c-donut']=new Chart(document.getElementById('c-donut'),{type:'doughnut',data:{labels:['Hit ✅','Gagal ❌','Belum ⏳','Diluar 🟡'],datasets:[{data:[th,tg,tb,td],backgroundColor:['rgba(0,230,118,.8)','rgba(255,71,87,.8)','rgba(79,195,247,.8)','rgba(255,211,42,.8)'],borderColor:['#00e676','#ff4757','#4fc3f7','#ffd32a'],borderWidth:2,hoverOffset:7}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'right',labels:{color:'#8a9bb5',font:FONT,padding:12}},tooltip:{callbacks:{label:c=>{const tot=c.dataset.data.reduce((a,b)=>a+b,0);return` ${c.label}: ${c.raw} (${tot?((c.raw/tot)*100).toFixed(1)+'%':'—'})`;}}}}}}); 
+  let th=0,tg=0;
+  all.forEach(s=>{th+=s.summary.hit||0;tg+=s.summary.gagal||0;});
+  charts['c-donut']=new Chart(document.getElementById('c-donut'),{type:'doughnut',data:{labels:['Hit ✅','Gagal ❌'],datasets:[{data:[th,tg],backgroundColor:['rgba(0,230,118,.8)','rgba(255,71,87,.8)'],borderColor:['#00e676','#ff4757'],borderWidth:2,hoverOffset:7}]},options:{responsive:true,cutout:'68%',plugins:{legend:{position:'right',labels:{color:'#8a9bb5',font:FONT,padding:12}},tooltip:{callbacks:{label:c=>{const tot=c.dataset.data.reduce((a,b)=>a+b,0);return` ${c.label}: ${c.raw} (${tot?((c.raw/tot)*100).toFixed(1)+'%':'—'})`;}}}}}});
 
   killChart('c-emiten');
   const es=emitenStats(all).slice(0,10);
   charts['c-emiten']=new Chart(document.getElementById('c-emiten'),{type:'bar',data:{labels:es.map(e=>e.name),datasets:[
     {label:'Hit',data:es.map(e=>e.hit),backgroundColor:'rgba(0,230,118,.75)'},
-    {label:'Gagal',data:es.map(e=>e.gagal),backgroundColor:'rgba(255,71,87,.75)'},
-    {label:'Belum',data:es.map(e=>e.belum),backgroundColor:'rgba(79,195,247,.75)'},
-    {label:'Diluar',data:es.map(e=>e.diluar),backgroundColor:'rgba(255,211,42,.75)'}
+    {label:'Gagal',data:es.map(e=>e.gagal),backgroundColor:'rgba(255,71,87,.75)'}
   ]},options:{responsive:true,maintainAspectRatio:true,indexAxis:'y',plugins:{legend:{labels:{color:'#8a9bb5',font:FONT}}},scales:{x:{stacked:true,ticks:{color:TICK_COLOR,font:FONT},grid:{color:GRID_COLOR}},y:{stacked:true,ticks:{color:'#c8d8f0',font:{family:'JetBrains Mono',size:11,weight:'bold'}},grid:{color:GRID_COLOR}}}}});
 
   const allES=emitenStats(all);
