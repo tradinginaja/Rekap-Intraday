@@ -536,26 +536,27 @@ function renderDash(){
   document.getElementById('haka-wr').textContent=hkd?((haka.hit/hkd)*100).toFixed(1)+'%':'—';
   const el=document.getElementById('db-recent');
   const recent=all.slice(0,5);
-  el.innerHTML=recent.length?'<div class="history-list">'+recent.map(s=>histHTML(s)).join('')+'</div>':noData();
+  el.innerHTML=recent.length?'<div class="history-list">'+recent.map(s=>histHTML(s,'dash')).join('')+'</div>':noData();
 }
 
 /* ── RENDER HISTORY ── */
 function renderHist(){
   const all=getSess();
   document.getElementById('hist-count').textContent=all.length?`(${all.length} sesi)`:'';
-  document.getElementById('hist-list').innerHTML=all.length?all.map(s=>histHTML(s)).join(''):noData();
+  document.getElementById('hist-list').innerHTML=all.length?all.map(s=>histHTML(s,'hist')).join(''):noData();
 }
 
-/* ── HIST HTML — dengan fix expand-btn onclick ── */
-function histHTML(s){
+/* ── HIST HTML — dengan ctx prefix agar ID tidak bentrok Dashboard vs Riwayat ── */
+function histHTML(s,ctx){
+  ctx=ctx||'hist';
   const dec=(s.summary.hit||0)+(s.summary.gagal||0);
   const wr=dec?((s.summary.hit/dec)*100).toFixed(0)+'%':'—';
   const wrC=dec?(s.summary.hit/dec>=.5?'var(--green)':'var(--red)'):'var(--text-dim)';
 
   const rows=(s.sahamList||[]).map(sh=>{
-    const bowEntries=sh.entries.filter(e=>(e.type||'').toUpperCase()==='BOW');
-    const hakaEntries=sh.entries.filter(e=>(e.type||'').toUpperCase()==='HAKA');
-    const noType=sh.entries.filter(e=>!(e.type||'').toUpperCase().match(/^(BOW|HAKA)$/));
+    const bowEntries=(sh.entries||[]).filter(e=>(e.type||'').toUpperCase()==='BOW');
+    const hakaEntries=(sh.entries||[]).filter(e=>(e.type||'').toUpperCase()==='HAKA');
+    const noType=(sh.entries||[]).filter(e=>!(e.type||'').toUpperCase().match(/^(BOW|HAKA)$/));
 
     const renderCell=arr=>{
       if(!arr.length) return '<span style="color:var(--text-dim);font-size:.56rem">—</span>';
@@ -576,9 +577,10 @@ function histHTML(s){
   }).join('');
 
   const hasEmiten=(s.sahamList||[]).length>0;
+  const uid=ctx+'-'+s.date;
 
-  return`<div class="history-item" id="hi-${s.date}">
-    <div class="history-top" onclick="toggleExp('${s.date}')">
+  return`<div class="history-item" id="hi-${uid}">
+    <div class="history-top" onclick="toggleExp('${uid}')">
       <div class="hist-date">📅 ${fmtDate(s.date)}</div>
       <div class="hist-badges">
         <span class="badge badge-green">✅ ${s.summary.hit||0}</span>
@@ -588,7 +590,7 @@ function histHTML(s){
         ${s.summary.avgProfit?`<span class="badge badge-orange">📈 ${s.summary.avgProfit}</span>`:''}
       </div>
       <div class="hist-wr" style="color:${wrC}">${wr}</div>
-      ${hasEmiten?`<button class="expand-btn" id="eb-${s.date}" onclick="event.stopPropagation();toggleExp('${s.date}')">▼ rincian</button>`:''}
+      ${hasEmiten?`<button class="expand-btn" id="eb-${uid}" onclick="event.stopPropagation();toggleExp('${uid}')">▼ rincian</button>`:''}
     </div>
     ${hasEmiten?`<div class="history-rincian">
       <table class="emiten-table">
@@ -603,10 +605,10 @@ function histHTML(s){
   </div>`;
 }
 
-/* ── TOGGLE EXPAND — fix onclick eksplisit ── */
-function toggleExp(date){
-  const item=document.getElementById('hi-'+date);
-  const btn=document.getElementById('eb-'+date);
+/* ── TOGGLE EXPAND ── */
+function toggleExp(uid){
+  const item=document.getElementById('hi-'+uid);
+  const btn=document.getElementById('eb-'+uid);
   if(!item||!btn) return;
   item.classList.toggle('expanded');
   btn.textContent=item.classList.contains('expanded')?'▲ tutup':'▼ rincian';
