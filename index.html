@@ -223,6 +223,14 @@ textarea{min-height:200px}
 .add-saham-row input{flex:1;margin:0}
 .btn-small{padding:7px 13px;font-size:.62rem;white-space:nowrap;margin-top:0;width:auto}
 
+/* ── MONTH FILTER ── */
+.month-filter-wrap{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.month-filter-label{font-size:.6rem;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.month-filter-select{background:var(--card);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.7rem;padding:8px 14px;outline:none;cursor:pointer;transition:border-color .2s;min-width:180px;width:auto}
+.month-filter-select:focus{border-color:var(--accent)}
+.month-filter-badge{font-size:.58rem;padding:4px 10px;border-radius:6px;background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,.25);display:none}
+.month-filter-badge.visible{display:inline-block}
+
 /* ── TOAST ── */
 .toast{position:fixed;bottom:22px;right:22px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:11px 16px;font-size:.68rem;color:var(--text);z-index:300;animation:fadeIn .3s ease;box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:270px}
 .toast.success{border-color:var(--green);color:var(--green)}
@@ -259,6 +267,13 @@ select option{background:var(--card)}
 
 <!-- ═══ DASHBOARD ═══ -->
 <div id="page-dashboard" class="page active">
+  <div class="month-filter-wrap">
+    <span class="month-filter-label">🗓️ Filter Bulan:</span>
+    <select class="month-filter-select" id="month-filter" onchange="onMonthFilter()">
+      <option value="">Keseluruhan</option>
+    </select>
+    <span class="month-filter-badge" id="month-badge"></span>
+  </div>
   <div class="stats-grid">
     <div class="stat-card green"><div class="stat-label">Win Rate</div><div class="stat-value" id="s-winrate">—</div><div class="stat-sub">Hit ÷ (Hit+Gagal)</div></div>
     <div class="stat-card green"><div class="stat-label">Total Hit ✅</div><div class="stat-value" id="s-hit">0</div><div class="stat-sub">semua sesi</div></div>
@@ -303,12 +318,26 @@ select option{background:var(--card)}
 
 <!-- ═══ RIWAYAT ═══ -->
 <div id="page-history" class="page">
+  <div class="month-filter-wrap" style="margin-bottom:14px">
+    <span class="month-filter-label">🗓️ Filter Bulan:</span>
+    <select class="month-filter-select" id="hist-month-filter" onchange="onHistMonthFilter()">
+      <option value="">Keseluruhan</option>
+    </select>
+    <span class="month-filter-badge" id="hist-month-badge"></span>
+  </div>
   <div class="section-title">SEMUA RIWAYAT <span style="font-weight:400;color:var(--text-dim)" id="hist-count"></span></div>
   <div id="hist-list" class="history-list"></div>
 </div>
 
 <!-- ═══ VISUALISASI ═══ -->
 <div id="page-visual" class="page">
+  <div class="month-filter-wrap" style="margin-bottom:14px">
+    <span class="month-filter-label">🗓️ Filter Bulan:</span>
+    <select class="month-filter-select" id="vis-month-filter" onchange="onVisMonthFilter()">
+      <option value="">Keseluruhan</option>
+    </select>
+    <span class="month-filter-badge" id="vis-month-badge"></span>
+  </div>
   <div class="chart-card full" style="margin-bottom:14px">
     <div class="chart-title">📈 Tren Win Rate Harian</div>
     <div class="chart-sub">Persentase Hit ÷ (Hit+Gagal) per sesi</div>
@@ -805,10 +834,60 @@ function emitenStats(all){
 }
 
 /* ══════════════════════════════════════════════
+   MONTH FILTER
+══════════════════════════════════════════════ */
+const BULAN_ID=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+
+function buildMonthOptions(){
+  // Populate all three dropdowns: dashboard, history & visualisasi
+  ['month-filter','hist-month-filter','vis-month-filter'].forEach(id=>{
+    const sel=document.getElementById(id);
+    if(!sel) return;
+    while(sel.options.length>1) sel.remove(1);
+    const months=[];
+    for(let y=2026;y<=2030;y++){
+      const start=(y===2026?3:0); // April=index 3 (0-based)
+      for(let m=start;m<12;m++){
+        months.push({val:`${y}-${String(m+1).padStart(2,'0')}`,label:`${BULAN_ID[m]} ${y}`});
+      }
+    }
+    months.forEach(({val,label})=>{
+      const o=document.createElement('option');
+      o.value=val;o.textContent=label;
+      sel.appendChild(o);
+    });
+  });
+}
+
+function getFilteredSess(){
+  const val=document.getElementById('month-filter').value;
+  const all=getSess();
+  if(!val) return all;
+  return all.filter(s=>s.date&&s.date.startsWith(val));
+}
+
+function onMonthFilter(){
+  const val=document.getElementById('month-filter').value;
+  const badge=document.getElementById('month-badge');
+  if(val){
+    const [y,m]=val.split('-');
+    badge.textContent=`${BULAN_ID[+m-1]} ${y}`;
+    badge.classList.add('visible');
+  } else {
+    badge.classList.remove('visible');
+  }
+  renderDash();
+}
+
+/* ══════════════════════════════════════════════
    DASHBOARD
 ══════════════════════════════════════════════ */
 function renderDash(){
-  const all=getSess();
+  const all=getFilteredSess();
+  const isFiltered=!!document.getElementById('month-filter').value;
+  // Update stat-sub text dinamis
+  const subText=isFiltered?'bulan ini':'semua sesi';
+  document.querySelectorAll('#s-hit~.stat-sub,#s-gagal~.stat-sub,#s-sesi~.stat-sub').forEach(el=>{if(el)el.textContent=subText;});
   let tot={hit:0,gagal:0,diluar:0,belum:0};
   all.forEach(s=>{tot.hit+=(s.summary.hit||0);tot.gagal+=(s.summary.gagal||0);tot.diluar+=(s.summary.diluar||0);tot.belum+=(s.summary.belum||0);});
   const dec=tot.hit+tot.gagal,grand=dec+tot.diluar+tot.belum;
@@ -822,6 +901,9 @@ function renderDash(){
   if(dec){
     document.getElementById('bar-hit').style.width=(tot.hit/dec*100)+'%';
     document.getElementById('bar-gagal').style.width=(tot.gagal/dec*100)+'%';
+  } else {
+    document.getElementById('bar-hit').style.width='0%';
+    document.getElementById('bar-gagal').style.width='0%';
   }
   const{bow,haka}=stratStats(all);
   const bwd=bow.hit+bow.gagal,hkd=haka.hit+haka.gagal;
@@ -840,11 +922,31 @@ function renderDash(){
   el.innerHTML=recent.length?'<div class="history-list">'+recent.map(s=>histHTML(s,'dash')).join('')+'</div>':noData();
 }
 
+function getHistFilteredSess(){
+  const val=document.getElementById('hist-month-filter').value;
+  const all=getSess();
+  if(!val) return all;
+  return all.filter(s=>s.date&&s.date.startsWith(val));
+}
+
+function onHistMonthFilter(){
+  const val=document.getElementById('hist-month-filter').value;
+  const badge=document.getElementById('hist-month-badge');
+  if(val){
+    const [y,m]=val.split('-');
+    badge.textContent=`${BULAN_ID[+m-1]} ${y}`;
+    badge.classList.add('visible');
+  } else {
+    badge.classList.remove('visible');
+  }
+  renderHist();
+}
+
 /* ══════════════════════════════════════════════
    HISTORY
 ══════════════════════════════════════════════ */
 function renderHist(){
-  const all=getSess();
+  const all=getHistFilteredSess();
   document.getElementById('hist-count').textContent=all.length?`(${all.length} sesi)`:'';
   document.getElementById('hist-list').innerHTML=all.length?all.map(s=>histHTML(s,'hist')).join(''):noData();
 }
@@ -925,6 +1027,26 @@ function delSess(date){
   showToast('Rekap dihapus.','error');
 }
 
+function getVisFilteredSess(){
+  const val=document.getElementById('vis-month-filter').value;
+  const all=getSess();
+  if(!val) return all;
+  return all.filter(s=>s.date&&s.date.startsWith(val));
+}
+
+function onVisMonthFilter(){
+  const val=document.getElementById('vis-month-filter').value;
+  const badge=document.getElementById('vis-month-badge');
+  if(val){
+    const [y,m]=val.split('-');
+    badge.textContent=`${BULAN_ID[+m-1]} ${y}`;
+    badge.classList.add('visible');
+  } else {
+    badge.classList.remove('visible');
+  }
+  renderVis();
+}
+
 /* ══════════════════════════════════════════════
    VISUALISASI
 ══════════════════════════════════════════════ */
@@ -935,7 +1057,7 @@ const TICK_COLOR='#5a7090';
 const GRID_COLOR='rgba(255,255,255,.04)';
 
 function renderVis(){
-  const all=getSess().slice().reverse();
+  const all=getVisFilteredSess().slice().reverse();
   if(!all.length){
     ['c-wr','c-daily','c-strat','c-donut','c-emiten'].forEach(id=>{killChart(id);});
     document.getElementById('emiten-tbody').innerHTML='<tr><td colspan="10" style="color:var(--text-dim);text-align:center;padding:28px">Belum ada data</td></tr>';
@@ -1237,6 +1359,7 @@ function noData(){return`<div class="no-data"><div style="font-size:2rem;margin-
 document.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('m-date').value=today();
   drawForms();
+  buildMonthOptions();
   // Auto-pull dari cloud saat pertama buka
   updateSyncStatus(null);
   await autoPullOnLoad();
